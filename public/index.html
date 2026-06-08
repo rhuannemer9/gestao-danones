@@ -160,14 +160,16 @@ li{margin:6px 0}
     <table>
       <thead>
         <tr>
-          <th>Produto</th>
-          <th>Categoria</th>
-          <th>Custo</th>
-          <th>Venda</th>
-          <th>Qtd</th>
-          <th>Validade</th>
-          <th>Status</th>
-          <th>Ações</th>
+<th>Cliente</th>
+<th>Produto</th>
+<th>Qtd</th>
+<th>Total</th>
+<th>Pago</th>
+<th>Saldo</th>
+<th>Data</th>
+<th>Vencimento</th>
+<th>Situação</th>
+<th>Ação</th>
         </tr>
       </thead>
       <tbody id="lista"></tbody>
@@ -196,6 +198,7 @@ li{margin:6px 0}
       </thead>
       <tbody id="listaClientes"></tbody>
     </table>
+    <div id="fichaCliente" class="card" style="display:none;"></div>
   </div>
 </div>
 
@@ -581,6 +584,154 @@ async function excluirProduto(id){
   carregar();
 }
 
+async function carregarPagamentosVenda(idVenda){
+  const resposta = await fetch(`/pagamentos-venda/${idVenda}`);
+  const pagamentos = await resposta.json();
+
+  if(!Array.isArray(pagamentos) || pagamentos.length === 0){
+    return '<p>Nenhum pagamento registrado.</p>';
+  }
+
+  let html = `
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Valor pago</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+
+  pagamentos.forEach(pagamento => {
+    const data = new Date(pagamento.dataPagamento).toLocaleDateString('pt-BR');
+
+    html += `
+      <tr>
+        <td>${data}</td>
+        <td>${dinheiro(pagamento.valor)}</td>
+      </tr>
+    `;
+  });
+
+  html += `
+      </tbody>
+    </table>
+  `;
+
+  return html;
+}
+
+async function verFichaCliente(id){
+  const resposta = await fetch(`/clientes/${id}/resumo`);
+  const dados = await resposta.json();
+
+  if(dados.erro){
+    alert(dados.erro);
+    return;
+  }
+
+  const cliente = dados.cliente;
+
+  const ultimaCompra = dados.ultimaCompra
+    ? new Date(dados.ultimaCompra).toLocaleDateString('pt-BR')
+    : 'Nenhuma compra';
+
+  let htmlVendas = '';
+
+  if(dados.vendas.length === 0){
+    htmlVendas = '<p>Esse cliente ainda não possui compras.</p>';
+  }else{
+    for(const venda of dados.vendas){
+      const data = new Date(venda.data).toLocaleDateString('pt-BR');
+
+      const vencimento = venda.dataVencimento
+        ? new Date(venda.dataVencimento).toLocaleDateString('pt-BR')
+        : '-';
+
+      htmlVendas += `
+        <tr>
+          <td>${data}</td>
+          <td>${venda.produtoNome}</td>
+          <td>${venda.quantidade}</td>
+          <td>${dinheiro(venda.valorTotal)}</td>
+          <td>${dinheiro(venda.valorPago || 0)}</td>
+          <td>${dinheiro(venda.saldoRestante || 0)}</td>
+          <td>${vencimento}</td>
+          <td>${venda.status}</td>
+        </tr>
+      `;
+
+      const htmlPagamentos = await carregarPagamentosVenda(venda.id);
+
+      htmlVendas += `
+        <tr>
+          <td colspan="8">
+            <strong>Histórico de pagamentos:</strong>
+            ${htmlPagamentos}
+          </td>
+        </tr>
+      `;
+    }
+  }
+
+  const ficha = document.getElementById('fichaCliente');
+
+  ficha.style.display = 'block';
+
+  ficha.innerHTML = `
+    <h2>Ficha do Cliente</h2>
+
+    <h3>${cliente.nome}</h3>
+
+    <p><strong>Telefone:</strong> ${cliente.telefone || '-'}</p>
+    <p><strong>Endereço:</strong> ${cliente.endereco || '-'}</p>
+    <p><strong>Observações:</strong> ${cliente.observacoes || '-'}</p>
+
+    <hr>
+
+    <p><strong>Total comprado:</strong> ${dinheiro(dados.totalComprado)}</p>
+    <p><strong>Total pago:</strong> ${dinheiro(dados.totalPago)}</p>
+    <p><strong>Em aberto:</strong> ${dinheiro(dados.totalAberto)}</p>
+    <p><strong>Última compra:</strong> ${ultimaCompra}</p>
+
+    <hr>
+
+    <h3>Histórico de compras</h3>
+
+    ${
+      dados.vendas.length === 0
+      ? htmlVendas
+      : `
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Produto</th>
+              <th>Qtd</th>
+              <th>Total</th>
+              <th>Pago</th>
+              <th>Saldo</th>
+              <th>Vencimento</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${htmlVendas}
+          </tbody>
+        </table>
+      `
+    }
+
+    <button onclick="document.getElementById('fichaCliente').style.display='none'">
+      Fechar Ficha
+    </button>
+  `;
+
+  ficha.scrollIntoView({
+    behavior:'smooth'
+  });
+}
 async function carregarClientes(){
   const resposta = await fetch('/clientes');
   const clientes = await resposta.json();
@@ -604,10 +755,11 @@ async function carregarClientes(){
           <td>${cliente.telefone || '-'}</td>
           <td>${cliente.endereco || '-'}</td>
           <td>${cliente.observacoes || '-'}</td>
-          <td>
-            <button onclick="editarCliente(${cliente.id})">Editar</button>
-            <button onclick="excluirCliente(${cliente.id})">Excluir</button>
-          </td>
+<td>
+  <button onclick="verFichaCliente(${cliente.id})">📋 Ver Ficha</button>
+  <button onclick="editarCliente(${cliente.id})">Editar</button>
+  <button onclick="excluirCliente(${cliente.id})">Excluir</button>
+</td>
         </tr>
       `;
     }
@@ -950,31 +1102,35 @@ async function carregarAbertas(){
 
   let html = '';
   let total = 0;
+
   let totalVencidas = 0;
-let totalHoje = 0;
-let total7Dias = 0;
+  let totalHoje = 0;
+  let total7Dias = 0;
 
   abertas.forEach(venda => {
-    total += Number(venda.valorTotal || 0);
+    const saldo = Number(venda.saldoRestante || venda.valorTotal || 0);
+
+    total += saldo;
+
     if(venda.dataVencimento){
-  const hoje = new Date();
-  const vencimentoObj = new Date(venda.dataVencimento);
+      const hoje = new Date();
+      const vencimentoObj = new Date(venda.dataVencimento);
 
-  hoje.setHours(0,0,0,0);
-  vencimentoObj.setHours(0,0,0,0);
+      hoje.setHours(0,0,0,0);
+      vencimentoObj.setHours(0,0,0,0);
 
-  const dias = Math.ceil(
-    (vencimentoObj - hoje) / (1000 * 60 * 60 * 24)
-  );
+      const dias = Math.ceil(
+        (vencimentoObj - hoje) / (1000 * 60 * 60 * 24)
+      );
 
-  if(dias < 0){
-    totalVencidas++;
-  }else if(dias === 0){
-    totalHoje++;
-  }else if(dias <= 7){
-    total7Dias++;
-  }
-}
+      if(dias < 0){
+        totalVencidas++;
+      }else if(dias === 0){
+        totalHoje++;
+      }else if(dias <= 7){
+        total7Dias++;
+      }
+    }
 
     const data = new Date(venda.data).toLocaleDateString('pt-BR');
 
@@ -990,11 +1146,13 @@ let total7Dias = 0;
         <td>${venda.produtoNome}</td>
         <td>${venda.quantidade}</td>
         <td>${dinheiro(venda.valorTotal)}</td>
+        <td>${dinheiro(venda.valorPago || 0)}</td>
+        <td>${dinheiro(saldo)}</td>
         <td>${data}</td>
         <td>${vencimento}</td>
         <td>${situacaoCobranca(venda.dataVencimento)}</td>
         <td>
-          <button onclick="receberVenda(${venda.id})">Receber</button>
+          <button onclick="receberVenda(${venda.id}, ${saldo})">Receber</button>
           <button onclick="cobrarCliente(JSON.parse(decodeURIComponent('${vendaTexto}')))">📱 Cobrar</button>
         </td>
       </tr>
@@ -1003,54 +1161,51 @@ let total7Dias = 0;
 
   document.getElementById('listaAbertas').innerHTML = html;
   document.getElementById('totalAberto').innerText = dinheiro(total);
+
+  document.getElementById('cobrancasVencidas').innerText = totalVencidas;
+  document.getElementById('cobrancasHoje').innerText = totalHoje;
+  document.getElementById('cobrancas7Dias').innerText = total7Dias;
 }
 
-async function receberVenda(id){
-  if(!confirm('Marcar essa venda como paga?')) return;
+async function receberVenda(id, saldoAtual){
+  const valor = prompt(
+    `Saldo atual: ${dinheiro(saldoAtual)}\n\nDigite o valor recebido:`,
+    saldoAtual
+  );
 
-  await fetch(`/vendas/${id}/receber`,{method:'POST'});
-  carregar();
-}
-
-async function excluirVenda(id){
-  if(!confirm('Excluir venda?')) return;
-
-  await fetch(`/vendas/${id}`,{method:'DELETE'});
-  carregar();
-}
-
-async function gerarRelatorioPeriodo(){
-  const inicio = document.getElementById('dataInicial').value;
-  const fim = document.getElementById('dataFinal').value;
-
-  if(!inicio || !fim){
-    alert('Selecione a data inicial e a data final.');
+  if(!valor){
     return;
   }
 
-  const resposta = await fetch('/vendas');
-  const vendas = await resposta.json();
+  const valorRecebido = Number(
+    String(valor).replace(',', '.')
+  );
 
-  const dataInicio = new Date(inicio + 'T00:00:00');
-  const dataFim = new Date(fim + 'T23:59:59');
+  if(!valorRecebido || valorRecebido <= 0){
+    alert('Valor inválido.');
+    return;
+  }
 
-  let totalVendas = 0;
-  let totalFaturamento = 0;
-  let totalLucro = 0;
-
-  vendas.forEach(venda => {
-    const dataVenda = new Date(venda.data);
-
-    if(dataVenda >= dataInicio && dataVenda <= dataFim){
-      totalVendas++;
-      totalFaturamento += Number(venda.valorTotal || 0);
-      totalLucro += Number(venda.lucro || 0);
-    }
+  const resposta = await fetch(`/vendas/${id}/receber`, {
+    method:'POST',
+    headers:{
+      'Content-Type':'application/json'
+    },
+    body:JSON.stringify({
+      valorRecebido:valorRecebido
+    })
   });
 
-  document.getElementById('periodoVendas').innerText = totalVendas;
-  document.getElementById('periodoFaturamento').innerText = dinheiro(totalFaturamento);
-  document.getElementById('periodoLucro').innerText = dinheiro(totalLucro);
+  const dados = await resposta.json();
+
+  if(dados.erro){
+    alert(dados.erro);
+    return;
+  }
+
+  alert('Pagamento registrado com sucesso.');
+
+  carregar();
 }
 
 async function carregarGraficoPizza(){

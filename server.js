@@ -381,6 +381,88 @@ app.post('/produtos/:id/saida', async (req, res) => {
 
 // CLIENTES - SUPABASE
 
+app.get('/clientes/:id/resumo', async (req, res) => {
+  const id = Number(req.params.id);
+
+  const { data: cliente, error: erroCliente } = await supabase
+    .from('clientes')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (erroCliente || !cliente) {
+    return res.status(404).json({
+      erro: 'Cliente não encontrado'
+    });
+  }
+
+  const { data: vendas, error: erroVendas } = await supabase
+    .from('vendas')
+    .select('*')
+    .eq('cliente_id', id)
+    .order('data', { ascending: false });
+
+  if (erroVendas) {
+    return res.status(500).json({
+      erro: erroVendas.message
+    });
+  }
+
+  const vendasFormatadas = vendas.map(v => ({
+    id: v.id,
+    clienteId: v.cliente_id,
+    clienteNome: v.cliente_nome,
+    produtoId: v.produto_id,
+    produtoNome: v.produto_nome,
+    quantidade: v.quantidade,
+    valorTotal: Number(v.valor_total || 0),
+    custoTotal: Number(v.custo_total || 0),
+    lucro: Number(v.lucro || 0),
+    status: v.status,
+    data: v.data,
+    dataPagamento: v.data_pagamento,
+    dataVencimento: v.data_vencimento,
+    valorPago: Number(v.valor_pago || 0),
+    saldoRestante: Number(v.saldo_restante || 0)
+  }));
+
+  const totalComprado = vendasFormatadas.reduce(
+    (soma, venda) => soma + Number(venda.valorTotal || 0),
+    0
+  );
+
+  const totalPago = vendasFormatadas.reduce(
+    (soma, venda) => soma + Number(venda.valorPago || 0),
+    0
+  );
+
+  const totalAberto = vendasFormatadas.reduce(
+    (soma, venda) => soma + Number(venda.saldoRestante || 0),
+    0
+  );
+
+  const ultimaCompra =
+    vendasFormatadas.length > 0
+      ? vendasFormatadas[0].data
+      : null;
+
+  res.json({
+    cliente: {
+      id: cliente.id,
+      nome: cliente.nome,
+      telefone: cliente.telefone,
+      endereco: cliente.endereco,
+      observacoes: cliente.observacoes,
+      criadoEm: cliente.criado_em
+    },
+    totalComprado,
+    totalPago,
+    totalAberto,
+    ultimaCompra,
+    vendas: vendasFormatadas
+  });
+});
+
 app.get('/clientes', async (req, res) => {
   const { data, error } = await supabase
     .from('clientes')
@@ -484,6 +566,31 @@ app.delete('/clientes/:id', async (req, res) => {
 
 // VENDAS - SUPABASE
 
+app.get('/vendas/:id/pagamentos', async (req, res) => {
+  const id = Number(req.params.id);
+
+  const { data, error } = await supabase
+    .from('pagamentos')
+    .select('*')
+    .eq('venda_id', id)
+    .order('data_pagamento', { ascending: false });
+
+  if (error) {
+    return res.status(500).json({
+      erro: error.message
+    });
+  }
+
+  res.json(data.map(p => ({
+    id: p.id,
+    vendaId: p.venda_id,
+    clienteId: p.cliente_id,
+    clienteNome: p.cliente_nome,
+    valor: Number(p.valor || 0),
+    dataPagamento: p.data_pagamento
+  })));
+});
+
 app.get('/vendas', async (req, res) => {
   const { data, error } = await supabase
     .from('vendas')
@@ -501,13 +608,15 @@ app.get('/vendas', async (req, res) => {
     produtoId: v.produto_id,
     produtoNome: v.produto_nome,
     quantidade: v.quantidade,
-    valorTotal: Number(v.valor_total),
-    custoTotal: Number(v.custo_total),
-    lucro: Number(v.lucro),
+    valorTotal: Number(v.valor_total || 0),
+    custoTotal: Number(v.custo_total || 0),
+    lucro: Number(v.lucro || 0),
     status: v.status,
     data: v.data,
     dataPagamento: v.data_pagamento,
-    dataVencimento: v.data_vencimento
+    dataVencimento: v.data_vencimento,
+    valorPago: Number(v.valor_pago || 0),
+    saldoRestante: Number(v.saldo_restante || v.valor_total || 0)
   }));
 
   res.json(vendas);
@@ -531,13 +640,15 @@ app.get('/vendas/abertas', async (req, res) => {
     produtoId: v.produto_id,
     produtoNome: v.produto_nome,
     quantidade: v.quantidade,
-    valorTotal: Number(v.valor_total),
-    custoTotal: Number(v.custo_total),
-    lucro: Number(v.lucro),
+    valorTotal: Number(v.valor_total || 0),
+    custoTotal: Number(v.custo_total || 0),
+    lucro: Number(v.lucro || 0),
     status: v.status,
-data: v.data,
-dataPagamento: v.data_pagamento,
-dataVencimento: v.data_vencimento
+    data: v.data,
+    dataPagamento: v.data_pagamento,
+    dataVencimento: v.data_vencimento,
+    valorPago: Number(v.valor_pago || 0),
+    saldoRestante: Number(v.saldo_restante || v.valor_total || 0)
   }));
 
   res.json(abertas);
@@ -585,10 +696,10 @@ app.post('/vendas', async (req, res) => {
     });
   }
 
-  const valorTotal = Number(produto.preco_venda) * quantidade;
-  const custoTotal = Number(produto.custo) * quantidade;
+  const valorTotal = Number(produto.preco_venda || 0) * quantidade;
+  const custoTotal = Number(produto.custo || 0) * quantidade;
   const lucro = valorTotal - custoTotal;
-  const novaQuantidade = Number(produto.quantidade) - quantidade;
+  const novaQuantidade = Number(produto.quantidade || 0) - quantidade;
 
   const { error: erroEstoque } = await supabase
     .from('produtos')
@@ -603,27 +714,29 @@ app.post('/vendas', async (req, res) => {
 
   const dataVenda = new Date();
 
-let dataVencimento = null;
+  let dataVencimento = null;
 
-if (status === 'Em aberto') {
-  dataVencimento = new Date(dataVenda);
-  dataVencimento.setDate(dataVencimento.getDate() + 30);
-}
+  if (status === 'Em aberto') {
+    dataVencimento = new Date(dataVenda);
+    dataVencimento.setDate(dataVencimento.getDate() + 30);
+  }
 
-const novaVenda = {
-  id: Date.now(),
-  cliente_id: clienteId,
-  cliente_nome: cliente.nome,
-  produto_id: produtoId,
-  produto_nome: produto.nome,
-  quantidade,
-  valor_total: valorTotal,
-  custo_total: custoTotal,
-  lucro,
-  status,
-  data: dataVenda.toISOString(),
-  data_vencimento: dataVencimento ? dataVencimento.toISOString() : null
-};
+  const novaVenda = {
+    id: Date.now(),
+    cliente_id: clienteId,
+    cliente_nome: cliente.nome,
+    produto_id: produtoId,
+    produto_nome: produto.nome,
+    quantidade,
+    valor_total: valorTotal,
+    custo_total: custoTotal,
+    lucro,
+    status,
+    data: dataVenda.toISOString(),
+    data_vencimento: dataVencimento ? dataVencimento.toISOString() : null,
+    valor_pago: status === 'Pago' ? valorTotal : 0,
+    saldo_restante: status === 'Pago' ? 0 : valorTotal
+  };
 
   const { data, error } = await supabase
     .from('vendas')
@@ -644,24 +757,72 @@ const novaVenda = {
     produtoId: data.produto_id,
     produtoNome: data.produto_nome,
     quantidade: data.quantidade,
-    valorTotal: Number(data.valor_total),
-    custoTotal: Number(data.custo_total),
-    lucro: Number(data.lucro),
+    valorTotal: Number(data.valor_total || 0),
+    custoTotal: Number(data.custo_total || 0),
+    lucro: Number(data.lucro || 0),
     status: data.status,
     data: data.data,
-    dataPagamento: v.data_pagamento,
-    dataVencimento: v.data_vencimento
+    dataPagamento: data.data_pagamento,
+    dataVencimento: data.data_vencimento,
+    valorPago: Number(data.valor_pago || 0),
+    saldoRestante: Number(data.saldo_restante || 0)
   });
 });
 
 app.post('/vendas/:id/receber', async (req, res) => {
   const id = Number(req.params.id);
+  const valorRecebido = Number(req.body.valorRecebido || 0);
+
+  if (!valorRecebido || valorRecebido <= 0) {
+    return res.status(400).json({
+      erro: 'Valor recebido inválido'
+    });
+  }
+
+  const { data: venda, error: erroBusca } = await supabase
+    .from('vendas')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (erroBusca || !venda) {
+    return res.status(404).json({
+      erro: 'Venda não encontrada'
+    });
+  }
+
+  const valorTotal = Number(venda.valor_total || 0);
+  const valorPagoAtual = Number(venda.valor_pago || 0);
+
+  const novoValorPago = valorPagoAtual + valorRecebido;
+  const valorPagoFinal = Math.min(novoValorPago, valorTotal);
+  const novoSaldo = Math.max(valorTotal - valorPagoFinal, 0);
+  const novoStatus = novoSaldo === 0 ? 'Pago' : 'Em aberto';
+
+  const { error: erroPagamento } = await supabase
+    .from('pagamentos')
+    .insert([{
+      id: Date.now(),
+      venda_id: id,
+      cliente_id: venda.cliente_id,
+      cliente_nome: venda.cliente_nome,
+      valor: valorRecebido,
+      data_pagamento: new Date().toISOString()
+    }]);
+
+  if (erroPagamento) {
+    return res.status(500).json({
+      erro: erroPagamento.message
+    });
+  }
 
   const { data, error } = await supabase
     .from('vendas')
     .update({
-      status: 'Pago',
-      data_pagamento: new Date().toISOString()
+      valor_pago: valorPagoFinal,
+      saldo_restante: novoSaldo,
+      status: novoStatus,
+      data_pagamento: novoStatus === 'Pago' ? new Date().toISOString() : null
     })
     .eq('id', id)
     .select()
@@ -674,20 +835,13 @@ app.post('/vendas/:id/receber', async (req, res) => {
   }
 
   res.json({
-    mensagem: 'Venda marcada como paga',
+    mensagem: 'Pagamento registrado com sucesso',
     venda: {
       id: data.id,
-      clienteId: data.cliente_id,
-      clienteNome: data.cliente_nome,
-      produtoId: data.produto_id,
-      produtoNome: data.produto_nome,
-      quantidade: data.quantidade,
-      valorTotal: Number(data.valor_total),
-      custoTotal: Number(data.custo_total),
-      lucro: Number(data.lucro),
-      status: data.status,
-      data: data.data,
-      dataPagamento: data.data_pagamento
+      valorTotal: Number(data.valor_total || 0),
+      valorPago: Number(data.valor_pago || 0),
+      saldoRestante: Number(data.saldo_restante || 0),
+      status: data.status
     }
   });
 });
@@ -1005,6 +1159,31 @@ app.get('/teste-supabase', async (req, res) => {
     mensagem: 'Conexão com Supabase funcionando',
     produtos: data
   });
+});
+
+app.get('/pagamentos-venda/:id', async (req, res) => {
+  const id = Number(req.params.id);
+
+  const { data, error } = await supabase
+    .from('pagamentos')
+    .select('*')
+    .eq('venda_id', id)
+    .order('data_pagamento', { ascending: false });
+
+  if (error) {
+    return res.status(500).json({
+      erro: error.message
+    });
+  }
+
+  res.json(data.map(p => ({
+    id: p.id,
+    vendaId: p.venda_id,
+    clienteId: p.cliente_id,
+    clienteNome: p.cliente_nome,
+    valor: Number(p.valor || 0),
+    dataPagamento: p.data_pagamento
+  })));
 });
 
 app.listen(3001, () => {
