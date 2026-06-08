@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#2563eb">
+
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Danones">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+<title>Gestão de Danones</title>
+
+<style>
+*{box-sizing:border-box}
+body{font-family:Arial,sans-serif;max-width:1300px;margin:auto;padding:24px;background:#eef2f7;color:#1f2937}
+h1{font-size:32px;margin-bottom:15px;color:#111827}
+h2{margin-top:0;color:#1f2937;border-left:5px solid #2563eb;padding-left:10px}
+h3{color:#374151}
+.card{background:#fff;padding:20px;margin:18px 0;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.08)}
+.dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:20px 0}
+.dash-item{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:white;padding:18px;border-radius:16px;box-shadow:0 8px 20px rgba(37,99,235,.25)}
+.dash-item strong{display:block;font-size:26px;margin-top:8px}
+input,select{width:220px;max-width:100%;padding:12px;margin:6px;border:1px solid #d1d5db;border-radius:10px;outline:none;background:white}
+input:focus,select:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+button{padding:11px 16px;margin:6px;cursor:pointer;border:none;border-radius:10px;background:#2563eb;color:white;font-weight:bold;transition:.2s}
+button:hover{background:#1d4ed8;transform:translateY(-1px)}
+button:active{transform:scale(.98)}
+table{width:100%;border-collapse:collapse;margin-top:15px;background:white;border-radius:12px;overflow:hidden}
+th{background:#f3f4f6;color:#374151;font-weight:bold}
+th,td{border-bottom:1px solid #e5e7eb;padding:12px;text-align:left}
+tr:hover{background:#f9fafb}
+ul{background:#f9fafb;padding:15px 25px;border-radius:12px}
+li{margin:6px 0}
+.vencido{color:#dc2626;font-weight:bold}
+.perto{color:#d97706;font-weight:bold}
+.ok{color:#16a34a;font-weight:bold}
+#telaLogin{max-width:420px;margin:80px auto;text-align:center}
+#telaLogin h2{border:none;padding:0}
+#telaLogin input{width:100%}
+.topo{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.abas{display:flex;gap:8px;flex-wrap:wrap;margin:15px 0}
+.abas button{background:#111827}
+.abas button.ativo{background:#2563eb}
+.aba{display:none}
+.aba.ativa{display:block}
+.acoes-topo button{background:#111827}
+.grafico-container{max-width:350px;margin:auto}
+@media(max-width:768px){
+  body{padding:12px}
+  h1{font-size:26px}
+  input,select,button{width:100%;margin:6px 0}
+  table{display:block;overflow-x:auto;white-space:nowrap}
+  .card{padding:15px}
+}
+</style>
+</head>
+
+<body>
+
+<div id="telaLogin" class="card">
+<h2>Login</h2>
+<input id="loginUsuario" placeholder="Usuário">
+<input id="loginSenha" type="password" placeholder="Senha">
+<button onclick="fazerLogin()">Entrar</button>
+<p id="erroLogin" style="color:red;"></p>
+</div>
+
+<div id="sistema" style="display:none;">
+
+<div class="topo">
+  <h1>Gestão de Danones</h1>
+  <div class="acoes-topo">
+    <button onclick="exportarBackup()">Backup JSON</button>
+    <button onclick="window.open('/excel/produtos')">📦 Excel Produtos</button>
+    <button onclick="window.open('/excel/clientes')">👥 Excel Clientes</button>
+    <button onclick="window.open('/excel/vendas')">💰 Excel Vendas</button>
+    <button onclick="sair()">Sair</button>
+  </div>
+</div>
+
+<div class="abas">
+  <button id="btnDashboard" onclick="mostrarAba('dashboard')">🏠 Dashboard</button>
+  <button id="btnProdutos" onclick="mostrarAba('produtos')">📦 Produtos</button>
+  <button id="btnClientes" onclick="mostrarAba('clientes')">👥 Clientes</button>
+  <button id="btnVendas" onclick="mostrarAba('vendas')">💰 Vendas</button>
+  <button id="btnFiado" onclick="mostrarAba('fiado')">💳 Fiado</button>
+  <button id="btnRelatorios" onclick="mostrarAba('relatorios')">📊 Relatórios</button>
+  <button id="btnConfiguracoes" onclick="mostrarAba('configuracoes')">⚙️ Configurações</button>
+</div>
+
+<div id="abaDashboard" class="aba ativa">
+  <div class="dashboard">
+    <div class="dash-item">Produtos<strong id="totalProdutos">0</strong></div>
+    <div class="dash-item">Itens em estoque<strong id="totalItens">0</strong></div>
+    <div class="dash-item">Valor em estoque<strong id="valorEstoque">R$ 0,00</strong></div>
+    <div class="dash-item">Lucro potencial<strong id="lucroPotencial">R$ 0,00</strong></div>
+    <div class="dash-item">Faturamento<strong id="faturamento">R$ 0,00</strong></div>
+    <div class="dash-item">Lucro realizado<strong id="lucroRealizado">R$ 0,00</strong></div>
+    <div class="dash-item">Em aberto<strong id="totalAberto">R$ 0,00</strong></div>
+    <div class="dash-item">Estoque baixo<strong id="alertaEstoqueBaixo">0</strong></div>
+    <div class="dash-item">Produtos vencidos<strong id="alertaVencidos">0</strong></div>
+    <div class="dash-item">Vencem em 7 dias<strong id="alertaVencendo">0</strong></div>
+    <div class="dash-item">Vendas do mês<strong id="vendasMes">0</strong></div>
+    <div class="dash-item">Faturamento mês<strong id="faturamentoMes">R$ 0,00</strong></div>
+    <div class="dash-item">Lucro mês<strong id="lucroMes">R$ 0,00</strong></div>
+    <div class="dash-item">Aberto no mês<strong id="abertoMes">R$ 0,00</strong></div>
+  </div>
+
+  <div class="card">
+    <h2>Alertas Detalhados</h2>
+    <h3>⚠ Estoque baixo</h3>
+    <ul id="listaEstoqueBaixo"></ul>
+    <h3>🔴 Produtos vencidos</h3>
+    <ul id="listaVencidos"></ul>
+    <h3>🟠 Vencem em até 7 dias</h3>
+    <ul id="listaVencendo"></ul>
+  </div>
+</div>
+
+<div id="abaProdutos" class="aba">
+  <div class="card">
+    <h2>Cadastrar Produto</h2>
+    <input id="nome" placeholder="Nome do produto">
+    <input id="custo" type="number" step="0.01" placeholder="Custo">
+    <input id="precoVenda" type="number" step="0.01" placeholder="Preço venda">
+    <input id="quantidade" type="number" placeholder="Quantidade">
+    <input id="validade" type="date">
+
+    <select id="categoria">
+      <option value="Danones">Danones</option>
+      <option value="Iogurtes">Iogurtes</option>
+      <option value="Bebidas">Bebidas</option>
+      <option value="Sobremesas">Sobremesas</option>
+      <option value="Açaí">Açaí</option>
+      <option value="Sorvetes">Sorvetes</option>
+    </select>
+
+    <button onclick="cadastrar()">Cadastrar</button>
+  </div>
+
+  <div class="card">
+    <h2>Produtos</h2>
+    <input id="buscaProduto" placeholder="Buscar produto..." oninput="carregarProdutos()">
+
+    <select id="filtroCategoria" onchange="carregarProdutos()">
+      <option value="">Todas Categorias</option>
+      <option value="Danones">Danones</option>
+      <option value="Iogurtes">Iogurtes</option>
+      <option value="Bebidas">Bebidas</option>
+      <option value="Sobremesas">Sobremesas</option>
+      <option value="Açaí">Açaí</option>
+      <option value="Sorvetes">Sorvetes</option>
+    </select>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Produto</th>
+          <th>Categoria</th>
+          <th>Custo</th>
+          <th>Venda</th>
+          <th>Qtd</th>
+          <th>Validade</th>
+          <th>Status</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody id="lista"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="abaClientes" class="aba">
+  <div class="card">
+    <h2>Cadastrar Cliente</h2>
+    <input id="clienteNome" placeholder="Nome do cliente">
+    <input id="clienteTelefone" placeholder="Telefone">
+    <input id="clienteEndereco" placeholder="Endereço">
+    <input id="clienteObs" placeholder="Observações">
+    <button onclick="cadastrarCliente()">Cadastrar Cliente</button>
+  </div>
+
+  <div class="card">
+    <h2>Clientes</h2>
+    <input id="buscaCliente" placeholder="Buscar cliente..." oninput="carregarClientes()">
+    <table>
+      <thead>
+        <tr>
+          <th>Nome</th><th>Telefone</th><th>Endereço</th><th>Observações</th><th>Ações</th>
+        </tr>
+      </thead>
+      <tbody id="listaClientes"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="abaVendas" class="aba">
+  <div class="card">
+    <h2>Registrar Venda</h2>
+    <select id="vendaCliente"></select>
+    <select id="vendaProduto"></select>
+    <input id="vendaQuantidade" type="number" placeholder="Quantidade">
+    <select id="vendaStatus">
+      <option value="Pago">Pago</option>
+      <option value="Em aberto">Em aberto</option>
+    </select>
+    <button onclick="registrarVenda()">Registrar Venda</button>
+  </div>
+
+  <div class="card">
+    <h2>Vendas</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th><th>Cliente</th><th>Produto</th><th>Qtd</th><th>Total</th><th>Lucro</th><th>Status</th><th>Ações</th>
+        </tr>
+      </thead>
+      <tbody id="listaVendas"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="abaFiado" class="aba">
+  <div class="card">
+    <h2>Fiado / Contas em Aberto</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Cliente</th><th>Produto</th><th>Qtd</th><th>Valor</th><th>Data</th><th>Ação</th>
+        </tr>
+      </thead>
+      <tbody id="listaAbertas"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="abaRelatorios" class="aba">
+  <div class="card">
+    <h2>Relatório por Período</h2>
+    <input id="dataInicial" type="date">
+    <input id="dataFinal" type="date">
+    <button onclick="gerarRelatorioPeriodo()">Gerar Relatório</button>
+    <table>
+      <tr><td><strong>Vendas no período</strong></td><td id="periodoVendas">0</td></tr>
+      <tr><td><strong>Faturamento no período</strong></td><td id="periodoFaturamento">R$ 0,00</td></tr>
+      <tr><td><strong>Lucro no período</strong></td><td id="periodoLucro">R$ 0,00</td></tr>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Gráfico de Vendas por Produto</h2>
+    <div class="grafico-container">
+      <canvas id="graficoPizza"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Relatório Geral</h2>
+    <table>
+      <tr><td><strong>Total de vendas</strong></td><td id="relatorioVendas">0</td></tr>
+      <tr><td><strong>Faturamento total</strong></td><td id="relatorioFaturamento">R$ 0,00</td></tr>
+      <tr><td><strong>Lucro total</strong></td><td id="relatorioLucro">R$ 0,00</td></tr>
+      <tr><td><strong>Produto mais vendido</strong></td><td id="produtoMaisVendido">-</td></tr>
+      <tr><td><strong>Cliente que mais comprou</strong></td><td id="clienteMaisComprou">-</td></tr>
+    </table>
+  </div>
+</div>
+
+<div id="abaConfiguracoes" class="aba">
+  <div class="card">
+    <h2>Configurações</h2>
+
+    <hr>
+
+<h3>Categorias</h3>
+
+<input
+  id="novaCategoria"
+  placeholder="Nova categoria">
+
+<button onclick="adicionarCategoria()">
+Adicionar Categoria
+</button>
+
+<ul id="listaCategorias"></ul>
+
+    <h3>Dados da Empresa</h3>
+    <input id="empresaNome" placeholder="Nome da empresa">
+    <input id="empresaTelefone" placeholder="Telefone">
+    <input id="empresaEndereco" placeholder="Endereço">
+    <input id="empresaInstagram" placeholder="Instagram">
+    <button onclick="salvarEmpresa()">Salvar Dados da Empresa</button>
+    <p id="mensagemEmpresa"></p>
+
+    <hr>
+
+    <h3>Alterar senha</h3>
+    <input id="senhaAtual" type="password" placeholder="Senha atual">
+    <input id="novaSenha" type="password" placeholder="Nova senha">
+    <input id="confirmarSenha" type="password" placeholder="Confirmar nova senha">
+    <button onclick="alterarSenha()">Alterar Senha</button>
+    <p id="mensagemSenha"></p>
+
+    <hr>
+
+    <h3>Restaurar Backup</h3>
+    <input id="arquivoBackup" type="file" accept=".json">
+    <button onclick="restaurarBackup()">Restaurar Backup</button>
+    <p id="mensagemBackup"></p>
+  </div>
+</div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+let graficoPizza = null;
+
+function mostrarAba(nome){
+  document.querySelectorAll('.aba').forEach(aba => aba.classList.remove('ativa'));
+  document.querySelectorAll('.abas button').forEach(botao => botao.classList.remove('ativo'));
+
+  document.getElementById('aba' + nome.charAt(0).toUpperCase() + nome.slice(1)).classList.add('ativa');
+
+  const botao = document.getElementById('btn' + nome.charAt(0).toUpperCase() + nome.slice(1));
+  if(botao) botao.classList.add('ativo');
+}
+
+async function fazerLogin(){
+  const usuario = document.getElementById('loginUsuario').value;
+  const senha = document.getElementById('loginSenha').value;
+
+  const resposta = await fetch('/login', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({usuario,senha})
+  });
+
+  const dados = await resposta.json();
+
+  if(dados.erro){
+    document.getElementById('erroLogin').innerText = dados.erro;
+    return;
+  }
+
+  localStorage.setItem('logado','sim');
+  document.getElementById('telaLogin').style.display='none';
+  document.getElementById('sistema').style.display='block';
+
+  mostrarAba('dashboard');
+  carregar();
+}
+
+function sair(){
+  localStorage.removeItem('logado');
+  location.reload();
+}
+
+function dinheiro(valor){
+  return Number(valor || 0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+}
+
+function statusValidade(dataValidade){
+  if(!dataValidade) return '<span class="ok">Sem validade</span>';
+
+  const hoje = new Date();
+  const validade = new Date(dataValidade + 'T00:00:00');
+  hoje.setHours(0,0,0,0);
+
+  const dias = Math.ceil((validade - hoje) / (1000 * 60 * 60 * 24));
+
+  if(dias < 0) return '<span class="vencido">Vencido</span>';
+  if(dias <= 7) return `<span class="perto">Vence em ${dias} dia(s)</span>`;
+
+  return '<span class="ok">Dentro da validade</span>';
+}
+
+async function carregar(){
+  await carregarProdutos();
+  await carregarClientes();
+  await carregarVendas();
+  await carregarAbertas();
+  await carregarEmpresa();
+  await carregarCategorias();
+  await carregarGraficoPizza();
+}
+
+async function carregarProdutos(){
+  const resposta = await fetch('/produtos');
+  const produtos = await resposta.json();
+
+  const campoBusca = document.getElementById('buscaProduto');
+  const termo = campoBusca ? campoBusca.value.trim().toLowerCase() : '';
+
+  const filtroCategoria = document.getElementById('filtroCategoria');
+  const categoriaSelecionada = filtroCategoria ? filtroCategoria.value : '';
+
+  let html = '';
+  let opcoesProdutos = '<option value="">Selecione o produto</option>';
+  let somaItens = 0, somaEstoque = 0, somaLucro = 0;
+  let totalEstoqueBaixo = 0, totalVencidos = 0, totalVencendo = 0;
+  let htmlEstoqueBaixo = '', htmlVencidos = '', htmlVencendo = '';
+
+  produtos.forEach(produto => {
+    const nomeProduto = produto.nome || '';
+    const categoriaProduto = produto.categoria || 'Danones';
+    const custo = Number(produto.custo || 0);
+    const precoVenda = Number(produto.precoVenda || 0);
+    const quantidade = Number(produto.quantidade || 0);
+
+    somaItens += quantidade;
+    somaEstoque += custo * quantidade;
+    somaLucro += (precoVenda - custo) * quantidade;
+
+    opcoesProdutos += `<option value="${produto.id}">${nomeProduto} - Estoque: ${quantidade}</option>`;
+
+    if(quantidade <= 10){
+      totalEstoqueBaixo++;
+      htmlEstoqueBaixo += `<li>${nomeProduto} - ${quantidade} unidade(s)</li>`;
+    }
+
+    if(produto.validade){
+      const hoje = new Date();
+      const validadeProduto = new Date(produto.validade + 'T00:00:00');
+      hoje.setHours(0,0,0,0);
+
+      const diasValidade = Math.ceil((validadeProduto - hoje) / (1000 * 60 * 60 * 24));
+
+      if(diasValidade < 0){
+        totalVencidos++;
+        htmlVencidos += `<li>${nomeProduto} - vencido há ${Math.abs(diasValidade)} dia(s)</li>`;
+      }else if(diasValidade <= 7){
+        totalVencendo++;
+        htmlVencendo += `<li>${nomeProduto} - vence em ${diasValidade} dia(s)</li>`;
+      }
+    }
+
+    const passouBusca = termo === '' || nomeProduto.toLowerCase().includes(termo);
+    const passouCategoria = categoriaSelecionada === '' || categoriaProduto === categoriaSelecionada;
+
+    if(passouBusca && passouCategoria){
+      html += `
+        <tr>
+          <td>${nomeProduto}</td>
+          <td>${categoriaProduto}</td>
+          <td>${dinheiro(custo)}</td>
+          <td>${dinheiro(precoVenda)}</td>
+          <td>${quantidade}</td>
+          <td>${produto.validade || '-'}</td>
+          <td>${statusValidade(produto.validade)}</td>
+          <td>
+            <button onclick="entrada(${produto.id})">Entrada</button>
+            <button onclick="saida(${produto.id})">Saída</button>
+            <button onclick="editarProduto(${produto.id})">Editar</button>
+            <button onclick="excluirProduto(${produto.id})">Excluir</button>
+          </td>
+        </tr>
+      `;
+    }
+  });
+
+  document.getElementById('lista').innerHTML = html;
+  document.getElementById('vendaProduto').innerHTML = opcoesProdutos;
+  document.getElementById('totalProdutos').innerText = produtos.length;
+  document.getElementById('totalItens').innerText = somaItens;
+  document.getElementById('valorEstoque').innerText = dinheiro(somaEstoque);
+  document.getElementById('lucroPotencial').innerText = dinheiro(somaLucro);
+  document.getElementById('alertaEstoqueBaixo').innerText = totalEstoqueBaixo;
+  document.getElementById('alertaVencidos').innerText = totalVencidos;
+  document.getElementById('alertaVencendo').innerText = totalVencendo;
+  document.getElementById('listaEstoqueBaixo').innerHTML = htmlEstoqueBaixo || '<li>Nenhum produto com estoque baixo</li>';
+  document.getElementById('listaVencidos').innerHTML = htmlVencidos || '<li>Nenhum produto vencido</li>';
+  document.getElementById('listaVencendo').innerHTML = htmlVencendo || '<li>Nenhum produto vencendo em até 7 dias</li>';
+}
+
+async function cadastrar(){
+  await fetch('/produtos', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      nome:document.getElementById('nome').value,
+      custo:Number(document.getElementById('custo').value),
+      precoVenda:Number(document.getElementById('precoVenda').value),
+      quantidade:Number(document.getElementById('quantidade').value),
+      validade:document.getElementById('validade').value,
+      categoria:document.getElementById('categoria').value
+    })
+  });
+
+  document.getElementById('nome').value='';
+  document.getElementById('custo').value='';
+  document.getElementById('precoVenda').value='';
+  document.getElementById('quantidade').value='';
+  document.getElementById('validade').value='';
+  document.getElementById('categoria').selectedIndex = 0;
+
+  carregar();
+}
+
+async function entrada(id){
+  const qtd = prompt('Quantidade de entrada:');
+  if(!qtd) return;
+
+  await fetch(`/produtos/${id}/entrada`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({quantidade:Number(qtd)})
+  });
+
+  carregar();
+}
+
+async function saida(id){
+  const qtd = prompt('Quantidade de saída/venda:');
+  if(!qtd) return;
+
+  const resposta = await fetch(`/produtos/${id}/saida`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({quantidade:Number(qtd)})
+  });
+
+  const dados = await resposta.json();
+  if(dados.erro) alert(dados.erro);
+
+  carregar();
+}
+
+async function editarProduto(id){
+  const resposta = await fetch('/produtos');
+  const produtos = await resposta.json();
+  const produto = produtos.find(p => p.id === id);
+
+  if(!produto){
+    alert('Produto não encontrado.');
+    return;
+  }
+
+  const novoNome = prompt('Nome:', produto.nome);
+  const novoCusto = prompt('Custo:', produto.custo);
+  const novoPreco = prompt('Preço de venda:', produto.precoVenda);
+  const novaQuantidade = prompt('Quantidade:', produto.quantidade);
+  const novaValidade = prompt('Validade (AAAA-MM-DD):', produto.validade);
+  const novaCategoria = prompt('Categoria:', produto.categoria || 'Danones');
+
+  if(!novoNome) return;
+
+  await fetch(`/produtos/${id}`,{
+    method:'PUT',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      nome:novoNome,
+      custo:Number(novoCusto),
+      precoVenda:Number(novoPreco),
+      quantidade:Number(novaQuantidade),
+      validade:novaValidade,
+      categoria:novaCategoria
+    })
+  });
+
+  carregar();
+}
+
+async function excluirProduto(id){
+  if(!confirm('Excluir produto?')) return;
+
+  await fetch(`/produtos/${id}`,{method:'DELETE'});
+  carregar();
+}
+
+async function carregarClientes(){
+  const resposta = await fetch('/clientes');
+  const clientes = await resposta.json();
+
+  const campoBusca = document.getElementById('buscaCliente');
+  const termo = campoBusca ? campoBusca.value.trim().toLowerCase() : '';
+
+  let html = '';
+  let opcoesClientes = '<option value="">Selecione o cliente</option>';
+
+  clientes.forEach(cliente => {
+    const nomeCliente = cliente.nome || '';
+    const telefoneCliente = cliente.telefone || '';
+
+    opcoesClientes += `<option value="${cliente.id}">${nomeCliente}</option>`;
+
+    if(termo === '' || nomeCliente.toLowerCase().includes(termo) || telefoneCliente.toLowerCase().includes(termo)){
+      html += `
+        <tr>
+          <td>${nomeCliente}</td>
+          <td>${cliente.telefone || '-'}</td>
+          <td>${cliente.endereco || '-'}</td>
+          <td>${cliente.observacoes || '-'}</td>
+          <td>
+            <button onclick="editarCliente(${cliente.id})">Editar</button>
+            <button onclick="excluirCliente(${cliente.id})">Excluir</button>
+          </td>
+        </tr>
+      `;
+    }
+  });
+
+  document.getElementById('listaClientes').innerHTML = html;
+  document.getElementById('vendaCliente').innerHTML = opcoesClientes;
+}
+
+async function cadastrarCliente(){
+  await fetch('/clientes',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      nome:document.getElementById('clienteNome').value,
+      telefone:document.getElementById('clienteTelefone').value,
+      endereco:document.getElementById('clienteEndereco').value,
+      observacoes:document.getElementById('clienteObs').value
+    })
+  });
+
+  document.getElementById('clienteNome').value='';
+  document.getElementById('clienteTelefone').value='';
+  document.getElementById('clienteEndereco').value='';
+  document.getElementById('clienteObs').value='';
+
+  carregar();
+}
+
+async function editarCliente(id){
+  const resposta = await fetch('/clientes');
+  const clientes = await resposta.json();
+  const cliente = clientes.find(c => c.id === id);
+
+  if(!cliente){
+    alert('Cliente não encontrado.');
+    return;
+  }
+
+  const novoNome = prompt('Nome:', cliente.nome);
+  const novoTelefone = prompt('Telefone:', cliente.telefone || '');
+  const novoEndereco = prompt('Endereço:', cliente.endereco || '');
+  const novasObs = prompt('Observações:', cliente.observacoes || '');
+
+  if(!novoNome) return;
+
+  await fetch(`/clientes/${id}`,{
+    method:'PUT',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      nome:novoNome,
+      telefone:novoTelefone,
+      endereco:novoEndereco,
+      observacoes:novasObs
+    })
+  });
+
+  carregar();
+}
+
+async function excluirCliente(id){
+  if(!confirm('Excluir cliente?')) return;
+
+  await fetch(`/clientes/${id}`,{method:'DELETE'});
+  carregar();
+}
+
+async function carregarVendas(){
+  const resposta = await fetch('/vendas');
+  const vendas = await resposta.json();
+
+  let html = '';
+  let totalFaturamento = 0;
+  let totalLucro = 0;
+  let vendasTotais = 0;
+  let vendasDoMes = 0;
+  let faturamentoDoMes = 0;
+  let lucroDoMes = 0;
+  let abertoDoMes = 0;
+
+const hoje = new Date();
+const mesAtual = hoje.getMonth();
+const anoAtual = hoje.getFullYear();
+
+  const rankingProdutos = {};
+  const rankingClientes = {};
+
+  vendas.forEach(venda => {
+    totalFaturamento += Number(venda.valorTotal || 0);
+    totalLucro += Number(venda.lucro || 0);
+    vendasTotais++;
+
+    rankingProdutos[venda.produtoNome] = (rankingProdutos[venda.produtoNome] || 0) + Number(venda.quantidade || 0);
+    rankingClientes[venda.clienteNome] = (rankingClientes[venda.clienteNome] || 0) + Number(venda.valorTotal || 0);
+
+    const data = new Date(venda.data).toLocaleDateString('pt-BR');
+    const dataVendaObj = new Date(venda.data);
+
+if(
+  dataVendaObj.getMonth() === mesAtual &&
+  dataVendaObj.getFullYear() === anoAtual
+){
+  vendasDoMes++;
+  faturamentoDoMes += Number(venda.valorTotal || 0);
+  lucroDoMes += Number(venda.lucro || 0);
+
+  if(venda.status === 'Em aberto'){
+    abertoDoMes += Number(venda.valorTotal || 0);
+  }
+}
+
+    html += `
+      <tr>
+        <td>${data}</td>
+        <td>${venda.clienteNome}</td>
+        <td>${venda.produtoNome}</td>
+        <td>${venda.quantidade}</td>
+        <td>${dinheiro(venda.valorTotal)}</td>
+        <td>${dinheiro(venda.lucro)}</td>
+        <td>${venda.status}</td>
+        <td><button onclick="excluirVenda(${venda.id})">Excluir</button></td>
+      </tr>
+    `;
+  });
+
+  let produtoTop = '-';
+  let clienteTop = '-';
+  let maiorProduto = 0;
+  let maiorCliente = 0;
+
+  for(const produto in rankingProdutos){
+    if(rankingProdutos[produto] > maiorProduto){
+      maiorProduto = rankingProdutos[produto];
+      produtoTop = produto;
+    }
+  }
+
+  for(const cliente in rankingClientes){
+    if(rankingClientes[cliente] > maiorCliente){
+      maiorCliente = rankingClientes[cliente];
+      clienteTop = cliente;
+    }
+  }
+
+  document.getElementById('listaVendas').innerHTML = html;
+  document.getElementById('faturamento').innerText = dinheiro(totalFaturamento);
+  document.getElementById('lucroRealizado').innerText = dinheiro(totalLucro);
+  document.getElementById('relatorioVendas').innerText = vendasTotais;
+  document.getElementById('relatorioFaturamento').innerText = dinheiro(totalFaturamento);
+  document.getElementById('relatorioLucro').innerText = dinheiro(totalLucro);
+  document.getElementById('produtoMaisVendido').innerText = produtoTop;
+  document.getElementById('clienteMaisComprou').innerText = clienteTop;
+  document.getElementById('vendasMes').innerText = vendasDoMes;
+document.getElementById('faturamentoMes').innerText = dinheiro(faturamentoDoMes);
+document.getElementById('lucroMes').innerText = dinheiro(lucroDoMes);
+document.getElementById('abertoMes').innerText = dinheiro(abertoDoMes);
+}
+
+async function registrarVenda(){
+  const cliente = document.getElementById('vendaCliente');
+  const produto = document.getElementById('vendaProduto');
+  const quantidade = document.getElementById('vendaQuantidade');
+  const status = document.getElementById('vendaStatus');
+
+  if(!cliente.value || !produto.value || !quantidade.value){
+    alert('Preencha cliente, produto e quantidade.');
+    return;
+  }
+
+  const resposta = await fetch('/vendas',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      clienteId:Number(cliente.value),
+      produtoId:Number(produto.value),
+      quantidade:Number(quantidade.value),
+      status:status.value
+    })
+  });
+
+  const dados = await resposta.json();
+
+  if(dados.erro){
+    alert(dados.erro);
+    return;
+  }
+
+  quantidade.value='';
+
+  const gerarRecibo = confirm('Venda registrada com sucesso. Deseja imprimir o recibo?');
+
+  if(gerarRecibo){
+    await imprimirRecibo(dados);
+  }
+
+  carregar();
+}
+
+async function imprimirRecibo(venda){
+  const resposta = await fetch('/empresa');
+  const empresa = await resposta.json();
+
+  const data = new Date(venda.data).toLocaleDateString('pt-BR');
+
+  const conteudo = `
+    <html>
+    <head>
+      <title>Recibo de Venda</title>
+      <style>
+        body{font-family:Arial;padding:20px;background:#f3f4f6}
+        .recibo{max-width:380px;margin:auto;background:white;border:1px solid #ddd;padding:22px;border-radius:12px}
+        h2{text-align:center;margin-bottom:5px}
+        .empresa{text-align:center;margin-bottom:20px;font-size:13px;color:#555}
+        p{font-size:16px;margin:8px 0}
+        .total{font-size:22px;font-weight:bold;margin-top:18px;border-top:1px solid #ddd;padding-top:12px}
+        .rodape{text-align:center;margin-top:25px;font-size:12px;color:#555}
+        @media print{body{background:white}.recibo{border:none}}
+      </style>
+      <link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#2563eb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Danones">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+    </head>
+    <body>
+      <div class="recibo">
+        <h2>${empresa.nome || 'Gestão de Danones'}</h2>
+        <div class="empresa">
+          ${empresa.telefone ? `<div>Telefone: ${empresa.telefone}</div>` : ''}
+          ${empresa.endereco ? `<div>Endereço: ${empresa.endereco}</div>` : ''}
+          ${empresa.instagram ? `<div>Instagram: ${empresa.instagram}</div>` : ''}
+        </div>
+        <hr>
+        <p><strong>Cliente:</strong> ${venda.clienteNome}</p>
+        <p><strong>Produto:</strong> ${venda.produtoNome}</p>
+        <p><strong>Quantidade:</strong> ${venda.quantidade}</p>
+        <p><strong>Status:</strong> ${venda.status}</p>
+        <p><strong>Data:</strong> ${data}</p>
+        <p class="total">Total: ${dinheiro(venda.valorTotal)}</p>
+        <div class="rodape">Obrigado pela preferência!</div>
+      </div>
+      <script>
+        window.onload = function(){window.print();}
+
+        if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/service-worker.js')
+    .then(() => {
+      console.log('PWA ativado com sucesso');
+    })
+    .catch(erro => {
+      console.log('Erro ao ativar PWA:', erro);
+    });
+}
+
+      <//script>
+
+      
+    
+    </body>
+    </html>
+  `;
+
+  const janela = window.open('', '_blank');
+  janela.document.write(conteudo);
+  janela.document.close();
+}
+
+async function carregarAbertas(){
+  const resposta = await fetch('/vendas/abertas');
+  const abertas = await resposta.json();
+
+  let html = '';
+  let total = 0;
+
+  abertas.forEach(venda => {
+    total += Number(venda.valorTotal || 0);
+    const data = new Date(venda.data).toLocaleDateString('pt-BR');
+
+    html += `
+      <tr>
+        <td>${venda.clienteNome}</td>
+        <td>${venda.produtoNome}</td>
+        <td>${venda.quantidade}</td>
+        <td>${dinheiro(venda.valorTotal)}</td>
+        <td>${data}</td>
+        <td><button onclick="receberVenda(${venda.id})">Receber</button></td>
+      </tr>
+    `;
+  });
+
+  document.getElementById('listaAbertas').innerHTML = html;
+  document.getElementById('totalAberto').innerText = dinheiro(total);
+}
+
+async function receberVenda(id){
+  if(!confirm('Marcar essa venda como paga?')) return;
+
+  await fetch(`/vendas/${id}/receber`,{method:'POST'});
+  carregar();
+}
+
+async function excluirVenda(id){
+  if(!confirm('Excluir venda?')) return;
+
+  await fetch(`/vendas/${id}`,{method:'DELETE'});
+  carregar();
+}
+
+async function gerarRelatorioPeriodo(){
+  const inicio = document.getElementById('dataInicial').value;
+  const fim = document.getElementById('dataFinal').value;
+
+  if(!inicio || !fim){
+    alert('Selecione a data inicial e a data final.');
+    return;
+  }
+
+  const resposta = await fetch('/vendas');
+  const vendas = await resposta.json();
+
+  const dataInicio = new Date(inicio + 'T00:00:00');
+  const dataFim = new Date(fim + 'T23:59:59');
+
+  let totalVendas = 0;
+  let totalFaturamento = 0;
+  let totalLucro = 0;
+
+  vendas.forEach(venda => {
+    const dataVenda = new Date(venda.data);
+
+    if(dataVenda >= dataInicio && dataVenda <= dataFim){
+      totalVendas++;
+      totalFaturamento += Number(venda.valorTotal || 0);
+      totalLucro += Number(venda.lucro || 0);
+    }
+  });
+
+  document.getElementById('periodoVendas').innerText = totalVendas;
+  document.getElementById('periodoFaturamento').innerText = dinheiro(totalFaturamento);
+  document.getElementById('periodoLucro').innerText = dinheiro(totalLucro);
+}
+
+async function carregarGraficoPizza(){
+  const resposta = await fetch('/vendas');
+  const vendas = await resposta.json();
+
+  const vendasPorProduto = {};
+
+  vendas.forEach(venda => {
+    vendasPorProduto[venda.produtoNome] =
+      (vendasPorProduto[venda.produtoNome] || 0) + Number(venda.valorTotal || 0);
+  });
+
+  const nomes = Object.keys(vendasPorProduto);
+  const valores = Object.values(vendasPorProduto);
+
+  const canvas = document.getElementById('graficoPizza');
+
+  if(!canvas || typeof Chart === 'undefined'){
+    return;
+  }
+
+  if(graficoPizza){
+    graficoPizza.destroy();
+  }
+
+  graficoPizza = new Chart(canvas, {
+    type:'pie',
+    data:{
+      labels:nomes,
+      datasets:[{
+        data:valores
+      }]
+    },
+    options:{
+      responsive:true,
+      maintainAspectRatio:true,
+      plugins:{
+        legend:{position:'bottom'},
+        title:{display:true,text:'Participação de vendas por produto'}
+      }
+    }
+  });
+}
+
+async function carregarEmpresa(){
+  const resposta = await fetch('/empresa');
+  const empresa = await resposta.json();
+
+  document.getElementById('empresaNome').value = empresa.nome || '';
+  document.getElementById('empresaTelefone').value = empresa.telefone || '';
+  document.getElementById('empresaEndereco').value = empresa.endereco || '';
+  document.getElementById('empresaInstagram').value = empresa.instagram || '';
+}
+
+async function salvarEmpresa(){
+  const resposta = await fetch('/empresa', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      nome:document.getElementById('empresaNome').value,
+      telefone:document.getElementById('empresaTelefone').value,
+      endereco:document.getElementById('empresaEndereco').value,
+      instagram:document.getElementById('empresaInstagram').value
+    })
+  });
+
+  const dados = await resposta.json();
+
+  document.getElementById('mensagemEmpresa').style.color = 'green';
+  document.getElementById('mensagemEmpresa').innerText = dados.mensagem;
+}
+
+async function alterarSenha(){
+  const senhaAtual = document.getElementById('senhaAtual').value;
+  const novaSenha = document.getElementById('novaSenha').value;
+  const confirmarSenha = document.getElementById('confirmarSenha').value;
+  const mensagem = document.getElementById('mensagemSenha');
+
+  if(!senhaAtual || !novaSenha || !confirmarSenha){
+    mensagem.style.color = 'red';
+    mensagem.innerText = 'Preencha todos os campos.';
+    return;
+  }
+
+  if(novaSenha !== confirmarSenha){
+    mensagem.style.color = 'red';
+    mensagem.innerText = 'A nova senha e a confirmação não conferem.';
+    return;
+  }
+
+  const resposta = await fetch('/alterar-senha', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      senhaAtual:senhaAtual,
+      novaSenha:novaSenha
+    })
+  });
+
+  const dados = await resposta.json();
+
+  if(dados.erro){
+    mensagem.style.color = 'red';
+    mensagem.innerText = dados.erro;
+    return;
+  }
+
+  mensagem.style.color = 'green';
+  mensagem.innerText = dados.mensagem;
+
+  document.getElementById('senhaAtual').value = '';
+  document.getElementById('novaSenha').value = '';
+  document.getElementById('confirmarSenha').value = '';
+}
+
+async function restaurarBackup(){
+  const input = document.getElementById('arquivoBackup');
+  const mensagem = document.getElementById('mensagemBackup');
+
+  if(!input.files.length){
+    mensagem.style.color = 'red';
+    mensagem.innerText = 'Selecione um arquivo de backup.';
+    return;
+  }
+
+  const confirmar = confirm('Isso irá substituir os produtos, clientes e vendas atuais. Deseja continuar?');
+
+  if(!confirmar){
+    return;
+  }
+
+  const arquivo = input.files[0];
+  const texto = await arquivo.text();
+
+  let backup;
+
+  try{
+    backup = JSON.parse(texto);
+  }catch{
+    mensagem.style.color = 'red';
+    mensagem.innerText = 'Arquivo JSON inválido.';
+    return;
+  }
+
+  const resposta = await fetch('/restaurar-backup', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(backup)
+  });
+
+  const dados = await resposta.json();
+
+  if(dados.erro){
+    mensagem.style.color = 'red';
+    mensagem.innerText = dados.erro;
+    return;
+  }
+
+  mensagem.style.color = 'green';
+  mensagem.innerText = dados.mensagem;
+
+  await carregar();
+}
+
+async function exportarBackup(){
+  const resposta = await fetch('/backup');
+  const dados = await resposta.json();
+
+  const texto = JSON.stringify(dados,null,2);
+  const arquivo = new Blob([texto],{type:'application/json'});
+  const link = document.createElement('a');
+
+  link.href = URL.createObjectURL(arquivo);
+  link.download = 'backup-gestao-danones.json';
+  link.click();
+}
+
+document.addEventListener('DOMContentLoaded',function(){
+  const logado = localStorage.getItem('logado');
+
+  if(logado === 'sim'){
+    document.getElementById('telaLogin').style.display='none';
+    document.getElementById('sistema').style.display='block';
+    mostrarAba('dashboard');
+    carregar();
+  }
+});
+
+async function carregarCategorias(){
+
+  const resposta =
+    await fetch('/categorias');
+
+  const categorias =
+    await resposta.json();
+
+  let html = '';
+
+  categorias.forEach(categoria=>{
+
+    html += `
+      <li>
+        ${categoria}
+
+        <button
+          onclick="removerCategoria('${categoria}')">
+          Excluir
+        </button>
+
+      </li>
+    `;
+  });
+
+  document.getElementById(
+    'listaCategorias'
+  ).innerHTML = html;
+
+  atualizarSelectCategorias();
+}
+
+async function adicionarCategoria(){
+
+  const nome =
+    document.getElementById(
+      'novaCategoria'
+    ).value;
+
+  const resposta =
+    await fetch('/categorias',{
+
+      method:'POST',
+
+      headers:{
+        'Content-Type':'application/json'
+      },
+
+      body:JSON.stringify({
+        nome
+      })
+
+    });
+
+  const dados =
+    await resposta.json();
+
+  if(dados.erro){
+    alert(dados.erro);
+    return;
+  }
+
+  document.getElementById(
+    'novaCategoria'
+  ).value = '';
+
+  carregarCategorias();
+}
+
+async function removerCategoria(nome){
+
+  if(
+    !confirm(
+      `Excluir categoria ${nome}?`
+    )
+  ){
+    return;
+  }
+
+  await fetch(
+    `/categorias/${nome}`,
+    {
+      method:'DELETE'
+    }
+  );
+
+  carregarCategorias();
+}
+
+async function atualizarSelectCategorias(){
+
+  const resposta =
+    await fetch('/categorias');
+
+  const categorias =
+    await resposta.json();
+
+  let html = '';
+
+  categorias.forEach(categoria=>{
+
+    html += `
+      <option value="${categoria}">
+        ${categoria}
+      </option>
+    `;
+
+  });
+
+  const selectCadastro =
+    document.getElementById(
+      'categoria'
+    );
+
+  const selectFiltro =
+    document.getElementById(
+      'filtroCategoria'
+    );
+
+  if(selectCadastro){
+    selectCadastro.innerHTML = html;
+  }
+
+  if(selectFiltro){
+    selectFiltro.innerHTML =
+      '<option value="">Todas Categorias</option>'
+      + html;
+  }
+
+}
+
+
+</script>
+
+</body>
+</html>
