@@ -506,7 +506,8 @@ app.get('/vendas', async (req, res) => {
     lucro: Number(v.lucro),
     status: v.status,
     data: v.data,
-    dataPagamento: v.data_pagamento
+    dataPagamento: v.data_pagamento,
+    dataVencimento: v.data_vencimento
   }));
 
   res.json(vendas);
@@ -534,8 +535,9 @@ app.get('/vendas/abertas', async (req, res) => {
     custoTotal: Number(v.custo_total),
     lucro: Number(v.lucro),
     status: v.status,
-    data: v.data,
-    dataPagamento: v.data_pagamento
+data: v.data,
+dataPagamento: v.data_pagamento,
+dataVencimento: v.data_vencimento
   }));
 
   res.json(abertas);
@@ -599,19 +601,29 @@ app.post('/vendas', async (req, res) => {
     });
   }
 
-  const novaVenda = {
-    id: Date.now(),
-    cliente_id: clienteId,
-    cliente_nome: cliente.nome,
-    produto_id: produtoId,
-    produto_nome: produto.nome,
-    quantidade,
-    valor_total: valorTotal,
-    custo_total: custoTotal,
-    lucro,
-    status,
-    data: new Date().toISOString()
-  };
+  const dataVenda = new Date();
+
+let dataVencimento = null;
+
+if (status === 'Em aberto') {
+  dataVencimento = new Date(dataVenda);
+  dataVencimento.setDate(dataVencimento.getDate() + 30);
+}
+
+const novaVenda = {
+  id: Date.now(),
+  cliente_id: clienteId,
+  cliente_nome: cliente.nome,
+  produto_id: produtoId,
+  produto_nome: produto.nome,
+  quantidade,
+  valor_total: valorTotal,
+  custo_total: custoTotal,
+  lucro,
+  status,
+  data: dataVenda.toISOString(),
+  data_vencimento: dataVencimento ? dataVencimento.toISOString() : null
+};
 
   const { data, error } = await supabase
     .from('vendas')
@@ -637,7 +649,8 @@ app.post('/vendas', async (req, res) => {
     lucro: Number(data.lucro),
     status: data.status,
     data: data.data,
-    dataPagamento: data.data_pagamento
+    dataPagamento: v.data_pagamento,
+    dataVencimento: v.data_vencimento
   });
 });
 

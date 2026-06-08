@@ -106,6 +106,9 @@ li{margin:6px 0}
     <div class="dash-item">Faturamento mês<strong id="faturamentoMes">R$ 0,00</strong></div>
     <div class="dash-item">Lucro mês<strong id="lucroMes">R$ 0,00</strong></div>
     <div class="dash-item">Aberto no mês<strong id="abertoMes">R$ 0,00</strong></div>
+    <div class="dash-item">Cobranças vencidas<strong id="cobrancasVencidas">0</strong></div>
+    <div class="dash-item">Vencem hoje<strong id="cobrancasHoje">0</strong></div>
+    <div class="dash-item">Vencem em 7 dias<strong id="cobrancas7Dias">0</strong></div>
   </div>
 
   <div class="card">
@@ -228,7 +231,14 @@ li{margin:6px 0}
     <table>
       <thead>
         <tr>
-          <th>Cliente</th><th>Produto</th><th>Qtd</th><th>Valor</th><th>Data</th><th>Ação</th>
+         <th>Cliente</th>
+<th>Produto</th>
+<th>Qtd</th>
+<th>Valor</th>
+<th>Data</th>
+<th>Vencimento</th>
+<th>Situação</th>
+<th>Ação</th>
         </tr>
       </thead>
       <tbody id="listaAbertas"></tbody>
@@ -865,16 +875,114 @@ async function imprimirRecibo(venda){
   janela.document.close();
 }
 
+function situacaoCobranca(dataVencimento){
+  if(!dataVencimento){
+    return '<span class="ok">Sem vencimento</span>';
+  }
+
+  const hoje = new Date();
+  const vencimento = new Date(dataVencimento);
+
+  hoje.setHours(0,0,0,0);
+  vencimento.setHours(0,0,0,0);
+
+  const dias = Math.ceil((vencimento - hoje) / (1000 * 60 * 60 * 24));
+
+  if(dias < 0){
+    return `<span class="vencido">Vencido há ${Math.abs(dias)} dia(s)</span>`;
+  }
+
+  if(dias === 0){
+    return '<span class="perto">Vence hoje</span>';
+  }
+
+  if(dias <= 7){
+    return `<span class="perto">Vence em ${dias} dia(s)</span>`;
+  }
+
+  return `<span class="ok">Em dia - vence em ${dias} dia(s)</span>`;
+}
+
+function limparTelefone(telefone){
+  return String(telefone || '').replace(/\D/g, '');
+}
+
+async function cobrarCliente(venda){
+  const resposta = await fetch('/clientes');
+  const clientes = await resposta.json();
+
+  const cliente = clientes.find(c => c.id === venda.clienteId);
+
+  const telefoneLimpo = limparTelefone(cliente ? cliente.telefone : '');
+
+  const vencimento = venda.dataVencimento
+    ? new Date(venda.dataVencimento).toLocaleDateString('pt-BR')
+    : 'sem data definida';
+
+  const mensagem =
+`Olá ${venda.clienteNome}, tudo bem?
+
+Passando para lembrar do pagamento referente à sua compra:
+
+Produto: ${venda.produtoNome}
+Valor: ${dinheiro(venda.valorTotal)}
+Vencimento: ${vencimento}
+
+Qualquer dúvida estou à disposição.`;
+
+  if(telefoneLimpo){
+    const numero = telefoneLimpo.startsWith('55')
+      ? telefoneLimpo
+      : '55' + telefoneLimpo;
+
+    const link = `https://wa.me/${numero}?text=${encodeURIComponent(mensagem)}`;
+
+    window.open(link, '_blank');
+  }else{
+    await navigator.clipboard.writeText(mensagem);
+    alert('Cliente sem telefone cadastrado. Mensagem copiada para a área de transferência.');
+  }
+}
+
 async function carregarAbertas(){
   const resposta = await fetch('/vendas/abertas');
   const abertas = await resposta.json();
 
   let html = '';
   let total = 0;
+  let totalVencidas = 0;
+let totalHoje = 0;
+let total7Dias = 0;
 
   abertas.forEach(venda => {
     total += Number(venda.valorTotal || 0);
+    if(venda.dataVencimento){
+  const hoje = new Date();
+  const vencimentoObj = new Date(venda.dataVencimento);
+
+  hoje.setHours(0,0,0,0);
+  vencimentoObj.setHours(0,0,0,0);
+
+  const dias = Math.ceil(
+    (vencimentoObj - hoje) / (1000 * 60 * 60 * 24)
+  );
+
+  if(dias < 0){
+    totalVencidas++;
+  }else if(dias === 0){
+    totalHoje++;
+  }else if(dias <= 7){
+    total7Dias++;
+  }
+}
+
     const data = new Date(venda.data).toLocaleDateString('pt-BR');
+
+    const vencimento = venda.dataVencimento
+      ? new Date(venda.dataVencimento).toLocaleDateString('pt-BR')
+      : '-';
+
+    const vendaTexto = encodeURIComponent(JSON.stringify(venda));
 
     html += `
       <tr>
@@ -883,7 +991,12 @@ async function carregarAbertas(){
         <td>${venda.quantidade}</td>
         <td>${dinheiro(venda.valorTotal)}</td>
         <td>${data}</td>
-        <td><button onclick="receberVenda(${venda.id})">Receber</button></td>
+        <td>${vencimento}</td>
+        <td>${situacaoCobranca(venda.dataVencimento)}</td>
+        <td>
+          <button onclick="receberVenda(${venda.id})">Receber</button>
+          <button onclick="cobrarCliente(JSON.parse(decodeURIComponent('${vendaTexto}')))">📱 Cobrar</button>
+        </td>
       </tr>
     `;
   });
