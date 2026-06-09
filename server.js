@@ -204,9 +204,10 @@ app.post('/empresa', async (req, res) => {
 
 app.get('/produtos', async (req, res) => {
   const { data, error } = await supabase
-    .from('produtos')
-    .select('*')
-    .order('id', { ascending: false });
+.from('produtos')
+.select('*')
+.eq('ativo', true)
+.order('id', { ascending: false });
 
   if (error) {
     return res.status(500).json({ erro: error.message });
@@ -291,14 +292,18 @@ app.delete('/produtos/:id', async (req, res) => {
 
   const { error } = await supabase
     .from('produtos')
-    .delete()
+    .update({ ativo: false })
     .eq('id', id);
 
   if (error) {
-    return res.status(500).json({ erro: error.message });
+    return res.status(500).json({
+      erro: error.message
+    });
   }
 
-  res.json({ mensagem: 'Produto excluído com sucesso' });
+  res.json({
+    mensagem: 'Produto desativado com sucesso'
+  });
 });
 
 app.post('/produtos/:id/entrada', async (req, res) => {
