@@ -207,7 +207,7 @@ app.get('/produtos', async (req, res) => {
 .from('produtos')
 .select('*')
 .eq('ativo', true)
-.order('id', { ascending: false });
+.order('id', { ascending: false })
 
   if (error) {
     return res.status(500).json({ erro: error.message });
@@ -728,6 +728,7 @@ app.post('/vendas', async (req, res) => {
 
   const novaVenda = {
     id: Date.now(),
+    sync_id: req.body.syncId || null,
     cliente_id: clienteId,
     cliente_nome: cliente.nome,
     produto_id: produtoId,
@@ -742,6 +743,22 @@ app.post('/vendas', async (req, res) => {
     valor_pago: status === 'Pago' ? valorTotal : 0,
     saldo_restante: status === 'Pago' ? 0 : valorTotal
   };
+
+  if(req.body.syncId){
+  const { data: vendaExistente } = await supabase
+    .from('vendas')
+    .select('*')
+    .eq('sync_id', req.body.syncId)
+    .maybeSingle();
+
+  if(vendaExistente){
+    return res.status(200).json({
+      id: vendaExistente.id,
+      mensagem: 'Venda já sincronizada',
+      duplicada: true
+    });
+  }
+}
 
   const { data, error } = await supabase
     .from('vendas')
@@ -804,22 +821,33 @@ app.post('/vendas/:id/receber', async (req, res) => {
   const novoSaldo = Math.max(valorTotal - valorPagoFinal, 0);
   const novoStatus = novoSaldo === 0 ? 'Pago' : 'Em aberto';
 
-  const { error: erroPagamento } = await supabase
+  const { error: erroPagamentoSync } = await supabase
     .from('pagamentos')
-    .insert([{
-      id: Date.now(),
-      venda_id: id,
-      cliente_id: venda.cliente_id,
-      cliente_nome: venda.cliente_nome,
-      valor: valorRecebido,
-      data_pagamento: new Date().toISOString()
-    }]);
+    if(req.body.syncId){
+  const { data: pagamentoExistente } = await supabase
+    .from('pagamentos')
+    .select('*')
+    .eq('sync_id', req.body.syncId)
+    .maybeSingle();
 
-  if (erroPagamento) {
-    return res.status(500).json({
-      erro: erroPagamento.message
+  if(pagamentoExistente){
+    return res.status(200).json({
+      mensagem: 'Pagamento já sincronizado',
+      duplicado: true
     });
   }
+}
+ const { error: erroPagamento } = await supabase
+  .from('pagamentos')
+  .insert([{
+    id: Date.now(),
+    sync_id: req.body.syncId || null,
+    venda_id: id,
+    cliente_id: venda.cliente_id,
+    cliente_nome: venda.cliente_nome,
+    valor: valorRecebido,
+    data_pagamento: new Date().toISOString()
+  }]);
 
   const { data, error } = await supabase
     .from('vendas')

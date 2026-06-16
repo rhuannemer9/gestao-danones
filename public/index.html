@@ -13,46 +13,449 @@
 <title>Gestão de Danones</title>
 
 <style>
-*{box-sizing:border-box}
-body{font-family:Arial,sans-serif;max-width:1300px;margin:auto;padding:24px;background:#eef2f7;color:#1f2937}
-h1{font-size:32px;margin-bottom:15px;color:#111827}
-h2{margin-top:0;color:#1f2937;border-left:5px solid #2563eb;padding-left:10px}
-h3{color:#374151}
-.card{background:#fff;padding:20px;margin:18px 0;border-radius:16px;box-shadow:0 8px 24px rgba(0,0,0,.08)}
-.dashboard{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin:20px 0}
-.dash-item{background:linear-gradient(135deg,#2563eb,#1d4ed8);color:white;padding:18px;border-radius:16px;box-shadow:0 8px 20px rgba(37,99,235,.25)}
-.dash-item strong{display:block;font-size:26px;margin-top:8px}
-input,select{width:220px;max-width:100%;padding:12px;margin:6px;border:1px solid #d1d5db;border-radius:10px;outline:none;background:white}
-input:focus,select:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.15)}
-button{padding:11px 16px;margin:6px;cursor:pointer;border:none;border-radius:10px;background:#2563eb;color:white;font-weight:bold;transition:.2s}
-button:hover{background:#1d4ed8;transform:translateY(-1px)}
-button:active{transform:scale(.98)}
-table{width:100%;border-collapse:collapse;margin-top:15px;background:white;border-radius:12px;overflow:hidden}
-th{background:#f3f4f6;color:#374151;font-weight:bold}
-th,td{border-bottom:1px solid #e5e7eb;padding:12px;text-align:left}
-tr:hover{background:#f9fafb}
-ul{background:#f9fafb;padding:15px 25px;border-radius:12px}
-li{margin:6px 0}
-.vencido{color:#dc2626;font-weight:bold}
-.perto{color:#d97706;font-weight:bold}
-.ok{color:#16a34a;font-weight:bold}
-#telaLogin{max-width:420px;margin:80px auto;text-align:center}
-#telaLogin h2{border:none;padding:0}
-#telaLogin input{width:100%}
-.topo{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
-.abas{display:flex;gap:8px;flex-wrap:wrap;margin:15px 0}
-.abas button{background:#111827}
-.abas button.ativo{background:#2563eb}
-.aba{display:none}
-.aba.ativa{display:block}
-.acoes-topo button{background:#111827}
-.grafico-container{max-width:350px;margin:auto}
+*{
+  box-sizing:border-box;
+}
+
+:root{
+  --bg:#f4f7fb;
+  --bg-soft:#eef3f9;
+  --card:#ffffff;
+  --card-2:#f8fafc;
+  --text:#0f172a;
+  --muted:#64748b;
+  --border:#e2e8f0;
+  --primary:#2563eb;
+  --primary-dark:#1d4ed8;
+  --primary-soft:#dbeafe;
+  --success:#16a34a;
+  --success-soft:#dcfce7;
+  --danger:#dc2626;
+  --danger-soft:#fee2e2;
+  --warning:#d97706;
+  --warning-soft:#fef3c7;
+  --dark:#111827;
+  --shadow:0 18px 45px rgba(15,23,42,.08);
+  --shadow-sm:0 8px 24px rgba(15,23,42,.06);
+}
+
+body{
+  margin:0;
+  padding:24px;
+  max-width:1400px;
+  margin:auto;
+  font-family:Inter,Arial,sans-serif;
+  background:
+    radial-gradient(circle at top left,#dbeafe 0,transparent 32%),
+    linear-gradient(180deg,#f8fbff 0%,var(--bg) 100%);
+  color:var(--text);
+}
+
+h1{
+  margin:0;
+  font-size:34px;
+  letter-spacing:-.8px;
+  font-weight:900;
+}
+
+h2{
+  margin:0 0 18px;
+  font-size:22px;
+  font-weight:900;
+  color:var(--text);
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+h2::before{
+  content:"";
+  width:6px;
+  height:26px;
+  border-radius:999px;
+  background:linear-gradient(180deg,var(--primary),#60a5fa);
+}
+
+h3{
+  font-size:16px;
+  margin:18px 0 10px;
+  color:#334155;
+}
+
+.card{
+  background:rgba(255,255,255,.92);
+  backdrop-filter:blur(10px);
+  padding:22px;
+  margin:18px 0;
+  border-radius:24px;
+  border:1px solid rgba(226,232,240,.9);
+  box-shadow:var(--shadow-sm);
+}
+
+.topo{
+  position:sticky;
+  top:0;
+  z-index:20;
+  background:rgba(244,247,251,.82);
+  backdrop-filter:blur(16px);
+  border-bottom:1px solid rgba(226,232,240,.8);
+  padding:16px 0;
+  margin-bottom:16px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:18px;
+  flex-wrap:wrap;
+}
+
+.acoes-topo{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.status-online,
+.status-offline,
+.status-cache{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  min-height:38px;
+  padding:9px 14px;
+  border-radius:999px;
+  font-size:13px;
+  font-weight:800;
+  white-space:nowrap;
+}
+
+.status-online{
+  color:#166534;
+  background:var(--success-soft);
+  border:1px solid #86efac;
+}
+
+.status-offline{
+  color:#991b1b;
+  background:var(--danger-soft);
+  border:1px solid #fca5a5;
+}
+
+.status-cache{
+  color:#075985;
+  background:#e0f2fe;
+  border:1px solid #7dd3fc;
+}
+
+.abas{
+  display:flex;
+  gap:10px;
+  overflow-x:auto;
+  padding:8px 2px 14px;
+  margin-bottom:10px;
+}
+
+.abas button{
+  background:white;
+  color:#334155;
+  border:1px solid var(--border);
+  box-shadow:none;
+  white-space:nowrap;
+}
+
+.abas button:hover{
+  background:var(--primary-soft);
+  color:var(--primary-dark);
+  transform:none;
+}
+
+.abas button.ativo{
+  background:linear-gradient(135deg,var(--primary),var(--primary-dark));
+  color:white;
+  border-color:transparent;
+  box-shadow:0 12px 24px rgba(37,99,235,.22);
+}
+
+.aba{
+  display:none;
+}
+
+.aba.ativa{
+  display:block;
+}
+
+.dashboard{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  gap:16px;
+  margin:18px 0;
+}
+
+.dash-item{
+  position:relative;
+  overflow:hidden;
+  min-height:112px;
+  padding:20px;
+  border-radius:24px;
+  color:white;
+  background:linear-gradient(135deg,#2563eb,#1e40af);
+  box-shadow:0 16px 32px rgba(37,99,235,.22);
+  font-size:14px;
+  font-weight:700;
+}
+
+.dash-item::after{
+  content:"";
+  position:absolute;
+  right:-25px;
+  top:-25px;
+  width:90px;
+  height:90px;
+  border-radius:50%;
+  background:rgba(255,255,255,.14);
+}
+
+.dash-item strong{
+  display:block;
+  margin-top:10px;
+  font-size:27px;
+  font-weight:900;
+  letter-spacing:-.6px;
+}
+
+input,
+select{
+  width:230px;
+  max-width:100%;
+  padding:13px 14px;
+  margin:7px 6px 7px 0;
+  border-radius:14px;
+  border:1px solid var(--border);
+  background:#fff;
+  color:var(--text);
+  font-size:14px;
+  outline:none;
+  transition:.2s;
+}
+
+input:focus,
+select:focus{
+  border-color:var(--primary);
+  box-shadow:0 0 0 4px rgba(37,99,235,.13);
+}
+
+button{
+  padding:12px 16px;
+  margin:7px 6px 7px 0;
+  border:none;
+  border-radius:14px;
+  background:linear-gradient(135deg,var(--primary),var(--primary-dark));
+  color:white;
+  font-weight:900;
+  font-size:14px;
+  cursor:pointer;
+  box-shadow:0 10px 22px rgba(37,99,235,.2);
+  transition:.18s;
+}
+
+button:hover{
+  transform:translateY(-1px);
+  box-shadow:0 14px 26px rgba(37,99,235,.26);
+}
+
+button:active{
+  transform:scale(.98);
+}
+
+.acoes-topo button{
+  background:#0f172a;
+  box-shadow:0 10px 20px rgba(15,23,42,.16);
+}
+
+table{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  margin-top:14px;
+  background:white;
+  border-radius:18px;
+  overflow:hidden;
+  border:1px solid var(--border);
+}
+
+th{
+  background:#f8fafc;
+  color:#475569;
+  font-size:12px;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+  font-weight:900;
+}
+
+th,td{
+  padding:14px;
+  border-bottom:1px solid var(--border);
+  text-align:left;
+  font-size:14px;
+  vertical-align:middle;
+}
+
+tr:last-child td{
+  border-bottom:none;
+}
+
+tbody tr:hover{
+  background:#f8fafc;
+}
+
+td button{
+  padding:9px 12px;
+  border-radius:12px;
+  font-size:13px;
+}
+
+ul{
+  background:#f8fafc;
+  border:1px solid var(--border);
+  padding:15px 24px;
+  border-radius:18px;
+}
+
+li{
+  margin:8px 0;
+}
+
+.vencido{
+  color:var(--danger);
+  background:var(--danger-soft);
+  padding:5px 9px;
+  border-radius:999px;
+  font-weight:900;
+  display:inline-block;
+}
+
+.perto{
+  color:var(--warning);
+  background:var(--warning-soft);
+  padding:5px 9px;
+  border-radius:999px;
+  font-weight:900;
+  display:inline-block;
+}
+
+.ok{
+  color:var(--success);
+  background:var(--success-soft);
+  padding:5px 9px;
+  border-radius:999px;
+  font-weight:900;
+  display:inline-block;
+}
+
+#telaLogin{
+  max-width:430px;
+  margin:90px auto;
+  text-align:center;
+  padding:34px;
+}
+
+#telaLogin h2{
+  justify-content:center;
+}
+
+#telaLogin h2::before{
+  display:none;
+}
+
+#telaLogin input,
+#telaLogin button{
+  width:100%;
+}
+
+.grafico-container{
+  max-width:390px;
+  margin:auto;
+}
+
+hr{
+  border:none;
+  border-top:1px solid var(--border);
+  margin:22px 0;
+}
+
 @media(max-width:768px){
-  body{padding:12px}
-  h1{font-size:26px}
-  input,select,button{width:100%;margin:6px 0}
-  table{display:block;overflow-x:auto;white-space:nowrap}
-  .card{padding:15px}
+  body{
+    padding:12px;
+  }
+
+  h1{
+    font-size:27px;
+  }
+
+  .topo{
+    align-items:flex-start;
+  }
+
+  .acoes-topo{
+    justify-content:flex-start;
+    overflow-x:auto;
+    flex-wrap:nowrap;
+    width:100%;
+    padding-bottom:6px;
+  }
+
+  .status-online,
+  .status-offline,
+  .status-cache{
+    flex:0 0 auto;
+  }
+
+  .dashboard{
+    grid-template-columns:repeat(2,1fr);
+    gap:12px;
+  }
+
+  .dash-item{
+    min-height:102px;
+    padding:16px;
+  }
+
+  .dash-item strong{
+    font-size:22px;
+  }
+
+  input,
+  select,
+  button{
+    width:100%;
+    margin:7px 0;
+  }
+
+  table{
+    display:block;
+    overflow-x:auto;
+    white-space:nowrap;
+  }
+
+  th,td{
+    padding:12px;
+  }
+
+  .card{
+    padding:18px;
+    border-radius:22px;
+  }
+}
+
+@media(max-width:430px){
+  .dashboard{
+    grid-template-columns:1fr;
+  }
+
+  .abas button{
+    padding:11px 14px;
+  }
 }
 </style>
 </head>
@@ -72,6 +475,15 @@ li{margin:6px 0}
 <div class="topo">
   <h1>Gestão de Danones</h1>
   <div class="acoes-topo">
+    <span id="statusConexao" class="status-online">
+  🟢 Online
+</span>
+<span id="statusCache" class="status-cache">
+  📦 Cache ainda não carregado
+</span>
+<span id="statusFilaSync" class="status-cache">
+  ✅ Tudo sincronizado
+</span>
     <button onclick="exportarBackup()">Backup JSON</button>
     <button onclick="window.open('/excel/produtos')">📦 Excel Produtos</button>
     <button onclick="window.open('/excel/clientes')">👥 Excel Clientes</button>
@@ -160,16 +572,14 @@ li{margin:6px 0}
     <table>
       <thead>
         <tr>
-<th>Cliente</th>
-<th>Produto</th>
-<th>Qtd</th>
-<th>Total</th>
-<th>Pago</th>
-<th>Saldo</th>
-<th>Data</th>
-<th>Vencimento</th>
-<th>Situação</th>
-<th>Ação</th>
+          <th>Produto</th>
+          <th>Categoria</th>
+          <th>Custo</th>
+          <th>Preço</th>
+          <th>Quantidade</th>
+          <th>Validade</th>
+          <th>Status</th>
+          <th>Ações</th>
         </tr>
       </thead>
       <tbody id="lista"></tbody>
@@ -234,14 +644,16 @@ li{margin:6px 0}
     <table>
       <thead>
         <tr>
-         <th>Cliente</th>
-<th>Produto</th>
-<th>Qtd</th>
-<th>Valor</th>
-<th>Data</th>
-<th>Vencimento</th>
-<th>Situação</th>
-<th>Ação</th>
+          <th>Cliente</th>
+          <th>Produto</th>
+          <th>Qtd</th>
+          <th>Total</th>
+          <th>Pago</th>
+          <th>Saldo</th>
+          <th>Data</th>
+          <th>Vencimento</th>
+          <th>Situação</th>
+          <th>Ação</th>
         </tr>
       </thead>
       <tbody id="listaAbertas"></tbody>
@@ -401,9 +813,68 @@ async function carregar(){
   await carregarGraficoPizza();
 }
 
+function salvarCacheLocal(chave, dados){
+  localStorage.setItem(chave, JSON.stringify(dados));
+  localStorage.setItem('ultimaAtualizacaoCache', new Date().toISOString());
+  atualizarStatusCache();
+}
+
+function carregarCacheLocal(chave){
+  const dados = localStorage.getItem(chave);
+
+  if(!dados){
+    return null;
+  }
+
+  try{
+    return JSON.parse(dados);
+  }catch{
+    return null;
+  }
+}
+
+function atualizarStatusCache(){
+  const statusCache = document.getElementById('statusCache');
+
+  if(!statusCache){
+    return;
+  }
+
+  const ultima = localStorage.getItem('ultimaAtualizacaoCache');
+
+  if(!ultima){
+    statusCache.innerText = '📦 Cache ainda não carregado';
+    return;
+  }
+
+  const data = new Date(ultima).toLocaleString('pt-BR');
+
+  statusCache.innerText = `📦 Cache atualizado: ${data}`;
+}
+
+function gerarSyncId(tipo){
+  return `${tipo}-${Date.now()}-${Math.random().toString(36).substring(2,10)}`;
+}
+
 async function carregarProdutos(){
-  const resposta = await fetch('/produtos');
-  const produtos = await resposta.json();
+  let produtos = [];
+
+  try{
+    const resposta = await fetch('/produtos');
+
+    if(!resposta.ok){
+      throw new Error('Erro ao buscar produtos');
+    }
+
+    produtos = await resposta.json();
+
+    salvarCacheLocal('produtosCache', produtos);
+
+  }catch{
+    produtos = carregarCacheLocal('produtosCache') || [];
+
+    console.log('Produtos carregados do cache local.');
+  }
 
   const campoBusca = document.getElementById('buscaProduto');
   const termo = campoBusca ? campoBusca.value.trim().toLowerCase() : '';
@@ -585,9 +1056,30 @@ async function excluirProduto(id){
 }
 
 async function carregarPagamentosVenda(idVenda){
-  const resposta = await fetch(`/pagamentos-venda/${idVenda}`);
-  const pagamentos = await resposta.json();
+  try{
+    const resposta = await fetch(`/pagamentos-venda/${idVenda}`);
 
+    if(!resposta.ok){
+      throw new Error('Erro ao buscar pagamentos');
+    }
+
+    const pagamentos = await resposta.json();
+
+    const pagamentosCache = carregarCacheLocal('pagamentosCache') || {};
+    pagamentosCache[idVenda] = pagamentos;
+    salvarCacheLocal('pagamentosCache', pagamentosCache);
+
+    return montarHtmlPagamentos(pagamentos);
+
+  }catch{
+    const pagamentosCache = carregarCacheLocal('pagamentosCache') || {};
+    const pagamentos = pagamentosCache[idVenda] || [];
+
+    return montarHtmlPagamentos(pagamentos);
+  }
+}
+
+function montarHtmlPagamentos(pagamentos){
   if(!Array.isArray(pagamentos) || pagamentos.length === 0){
     return '<p>Nenhum pagamento registrado.</p>';
   }
@@ -621,7 +1113,6 @@ async function carregarPagamentosVenda(idVenda){
 
   return html;
 }
-
 async function verFichaCliente(id){
   const resposta = await fetch(`/clientes/${id}/resumo`);
   const dados = await resposta.json();
@@ -733,8 +1224,24 @@ async function verFichaCliente(id){
   });
 }
 async function carregarClientes(){
-  const resposta = await fetch('/clientes');
-  const clientes = await resposta.json();
+  let clientes = [];
+
+  try{
+    const resposta = await fetch('/clientes');
+
+    if(!resposta.ok){
+      throw new Error('Erro ao buscar clientes');
+    }
+
+    clientes = await resposta.json();
+
+    salvarCacheLocal('clientesCache', clientes);
+
+  }catch{
+    clientes = carregarCacheLocal('clientesCache') || [];
+
+    console.log('Clientes carregados do cache local.');
+  }
 
   const campoBusca = document.getElementById('buscaCliente');
   const termo = campoBusca ? campoBusca.value.trim().toLowerCase() : '';
@@ -748,18 +1255,22 @@ async function carregarClientes(){
 
     opcoesClientes += `<option value="${cliente.id}">${nomeCliente}</option>`;
 
-    if(termo === '' || nomeCliente.toLowerCase().includes(termo) || telefoneCliente.toLowerCase().includes(termo)){
+    if(
+      termo === '' ||
+      nomeCliente.toLowerCase().includes(termo) ||
+      telefoneCliente.toLowerCase().includes(termo)
+    ){
       html += `
         <tr>
           <td>${nomeCliente}</td>
           <td>${cliente.telefone || '-'}</td>
           <td>${cliente.endereco || '-'}</td>
           <td>${cliente.observacoes || '-'}</td>
-<td>
-  <button onclick="verFichaCliente(${cliente.id})">📋 Ver Ficha</button>
-  <button onclick="editarCliente(${cliente.id})">Editar</button>
-  <button onclick="excluirCliente(${cliente.id})">Excluir</button>
-</td>
+          <td>
+            <button onclick="verFichaCliente(${cliente.id})">📋 Ver Ficha</button>
+            <button onclick="editarCliente(${cliente.id})">Editar</button>
+            <button onclick="excluirCliente(${cliente.id})">Excluir</button>
+          </td>
         </tr>
       `;
     }
@@ -769,67 +1280,420 @@ async function carregarClientes(){
   document.getElementById('vendaCliente').innerHTML = opcoesClientes;
 }
 
-async function cadastrarCliente(){
-  await fetch('/clientes',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      nome:document.getElementById('clienteNome').value,
-      telefone:document.getElementById('clienteTelefone').value,
-      endereco:document.getElementById('clienteEndereco').value,
-      observacoes:document.getElementById('clienteObs').value
-    })
+function adicionarFilaSync(item){
+  const fila = carregarCacheLocal('filaSync') || [];
+
+  fila.push({
+    ...item,
+    criadoEmLocal: new Date().toISOString()
   });
 
-  document.getElementById('clienteNome').value='';
-  document.getElementById('clienteTelefone').value='';
-  document.getElementById('clienteEndereco').value='';
-  document.getElementById('clienteObs').value='';
-
-  carregar();
+  salvarCacheLocal('filaSync', fila);
+  atualizarStatusFilaSync();
 }
 
+function atualizarStatusFilaSync(){
+  const status = document.getElementById('statusFilaSync');
+
+  if(!status){
+    return;
+  }
+
+  const fila = carregarCacheLocal('filaSync') || [];
+
+  if(fila.length === 0){
+    status.innerText = '✅ Tudo sincronizado';
+  }else{
+    status.innerText = `🔄 ${fila.length} item(ns) pendente(s)`;
+  }
+}
+
+async function cadastrarCliente(){
+  const novoCliente = {
+    id: Date.now(),
+    nome: document.getElementById('clienteNome').value,
+    telefone: document.getElementById('clienteTelefone').value,
+    endereco: document.getElementById('clienteEndereco').value,
+    observacoes: document.getElementById('clienteObs').value,
+    criadoEm: new Date().toISOString(),
+    pendenteSync: !navigator.onLine
+  };
+
+  if(!novoCliente.nome){
+    alert('Informe o nome do cliente.');
+    return;
+  }
+
+  if(navigator.onLine){
+    try{
+      const resposta = await fetch('/clientes',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          nome: novoCliente.nome,
+          telefone: novoCliente.telefone,
+          endereco: novoCliente.endereco,
+          observacoes: novoCliente.observacoes
+        })
+      });
+
+      const dados = await resposta.json();
+
+      if(dados.erro){
+        throw new Error(dados.erro);
+      }
+
+    }catch{
+      novoCliente.pendenteSync = true;
+
+      const clientesCache = carregarCacheLocal('clientesCache') || [];
+      clientesCache.unshift(novoCliente);
+      salvarCacheLocal('clientesCache', clientesCache);
+
+      adicionarFilaSync({
+        tipo: 'cliente',
+        acao: 'criar',
+        dados: novoCliente
+      });
+
+      alert('Sem conexão com o servidor. Cliente salvo localmente para sincronizar depois.');
+    }
+  }else{
+    const clientesCache = carregarCacheLocal('clientesCache') || [];
+    clientesCache.unshift(novoCliente);
+    salvarCacheLocal('clientesCache', clientesCache);
+
+    adicionarFilaSync({
+      tipo: 'cliente',
+      acao: 'criar',
+      dados: novoCliente
+    });
+
+    alert('Cliente salvo offline. Será sincronizado quando a internet voltar.');
+  }
+
+  document.getElementById('clienteNome').value = '';
+  document.getElementById('clienteTelefone').value = '';
+  document.getElementById('clienteEndereco').value = '';
+  document.getElementById('clienteObs').value = '';
+
+  carregarClientes();
+}
+
+
 async function editarCliente(id){
-  const resposta = await fetch('/clientes');
-  const clientes = await resposta.json();
-  const cliente = clientes.find(c => c.id === id);
+  let clientes = [];
+
+  try{
+    const resposta = await fetch('/clientes');
+    if(!resposta.ok){
+      throw new Error('Erro ao buscar clientes');
+    }
+    clientes = await resposta.json();
+    salvarCacheLocal('clientesCache', clientes);
+  }catch{
+    clientes = carregarCacheLocal('clientesCache') || [];
+  }
+
+  const cliente = clientes.find(c => Number(c.id) === Number(id));
 
   if(!cliente){
     alert('Cliente não encontrado.');
     return;
   }
 
-  const novoNome = prompt('Nome:', cliente.nome);
+  const novoNome = prompt('Nome:', cliente.nome || '');
   const novoTelefone = prompt('Telefone:', cliente.telefone || '');
   const novoEndereco = prompt('Endereço:', cliente.endereco || '');
   const novasObs = prompt('Observações:', cliente.observacoes || '');
 
-  if(!novoNome) return;
+  if(!novoNome){
+    return;
+  }
 
-  await fetch(`/clientes/${id}`,{
-    method:'PUT',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      nome:novoNome,
-      telefone:novoTelefone,
-      endereco:novoEndereco,
-      observacoes:novasObs
-    })
-  });
+  const clienteAtualizado = {
+    ...cliente,
+    nome: novoNome,
+    telefone: novoTelefone,
+    endereco: novoEndereco,
+    observacoes: novasObs
+  };
 
-  carregar();
+  const clientesCache = clientes.map(c =>
+    Number(c.id) === Number(id) ? clienteAtualizado : c
+  );
+
+  salvarCacheLocal('clientesCache', clientesCache);
+
+  if(navigator.onLine){
+    try{
+      const resposta = await fetch(`/clientes/${id}`,{
+        method:'PUT',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          nome: novoNome,
+          telefone: novoTelefone,
+          endereco: novoEndereco,
+          observacoes: novasObs
+        })
+      });
+
+      const dados = await resposta.json();
+
+      if(dados.erro){
+        throw new Error(dados.erro);
+      }
+    }catch{
+      adicionarFilaSync({
+        tipo: 'cliente',
+        acao: 'editar',
+        id,
+        dados: clienteAtualizado
+      });
+
+      alert('Alteração salva localmente para sincronizar depois.');
+    }
+  }else{
+    adicionarFilaSync({
+      tipo: 'cliente',
+      acao: 'editar',
+      id,
+      dados: clienteAtualizado
+    });
+
+    alert('Alteração salva offline. Será sincronizada depois.');
+  }
+
+  carregarClientes();
 }
 
 async function excluirCliente(id){
-  if(!confirm('Excluir cliente?')) return;
+  if(!confirm('Excluir cliente?')){
+    return;
+  }
 
-  await fetch(`/clientes/${id}`,{method:'DELETE'});
+  const clientes = carregarCacheLocal('clientesCache') || [];
+  const clientesAtualizados = clientes.filter(c => Number(c.id) !== Number(id));
+  salvarCacheLocal('clientesCache', clientesAtualizados);
+
+  if(navigator.onLine){
+    try{
+      const resposta = await fetch(`/clientes/${id}`,{method:'DELETE'});
+      const dados = await resposta.json();
+
+      if(dados.erro){
+        throw new Error(dados.erro);
+      }
+    }catch{
+      adicionarFilaSync({
+        tipo: 'cliente',
+        acao: 'excluir',
+        id
+      });
+
+      alert('Exclusão salva localmente para sincronizar depois.');
+    }
+  }else{
+    adicionarFilaSync({
+      tipo: 'cliente',
+      acao: 'excluir',
+      id
+    });
+
+    alert('Cliente removido offline. A exclusão será sincronizada depois.');
+  }
+
+  carregarClientes();
+}
+
+async function excluirVenda(id){
+  if(!confirm('Excluir venda?')){
+    return;
+  }
+
+  if(navigator.onLine){
+    const resposta = await fetch(`/vendas/${id}`,{method:'DELETE'});
+    const dados = await resposta.json();
+
+    if(dados.erro){
+      alert(dados.erro);
+      return;
+    }
+  }else{
+    const vendasCache = carregarCacheLocal('vendasCache') || [];
+    const abertasCache = carregarCacheLocal('abertasCache') || [];
+
+    salvarCacheLocal(
+      'vendasCache',
+      vendasCache.filter(v => Number(v.id) !== Number(id))
+    );
+
+    salvarCacheLocal(
+      'abertasCache',
+      abertasCache.filter(v => Number(v.id) !== Number(id))
+    );
+
+    adicionarFilaSync({
+      tipo: 'venda',
+      acao: 'excluir',
+      id
+    });
+
+    alert('Venda removida offline. A exclusão será sincronizada depois.');
+  }
+
   carregar();
 }
 
+async function receberVenda(id, saldoAtual){
+  const valor = prompt(
+    `Saldo atual: ${dinheiro(saldoAtual)}\n\nDigite o valor recebido:`,
+    saldoAtual
+  );
+
+  if(!valor){
+    return;
+  }
+
+  const valorRecebido = Number(String(valor).replace(',', '.'));
+
+  if(!valorRecebido || valorRecebido <= 0){
+    alert('Valor inválido.');
+    return;
+  }
+
+  const syncId = gerarSyncId('pagamento');
+
+  if(navigator.onLine){
+    try{
+      const resposta = await fetch(`/vendas/${id}/receber`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          valorRecebido,
+          syncId
+        })
+      });
+
+      const dados = await resposta.json();
+
+      if(dados.erro){
+        throw new Error(dados.erro);
+      }
+
+      alert('Pagamento registrado com sucesso.');
+      await carregar();
+      return;
+
+    }catch(erro){
+      console.log('Erro online ao registrar pagamento. Salvando offline.', erro);
+    }
+  }
+
+  const vendasCache = carregarCacheLocal('vendasCache') || [];
+  const abertasCache = carregarCacheLocal('abertasCache') || [];
+
+  let vendaEncontrada = null;
+
+  function aplicarPagamento(vendas){
+    return vendas.map(venda => {
+      if(Number(venda.id) !== Number(id)){
+        return venda;
+      }
+
+      vendaEncontrada = venda;
+
+      const valorTotal = Number(venda.valorTotal || 0);
+      const valorPagoAtual = Number(venda.valorPago || 0);
+      const valorPagoFinal = Math.min(valorPagoAtual + valorRecebido, valorTotal);
+      const novoSaldo = Math.max(valorTotal - valorPagoFinal, 0);
+
+      return {
+        ...venda,
+        valorPago: valorPagoFinal,
+        saldoRestante: novoSaldo,
+        status: novoSaldo === 0 ? 'Pago' : 'Em aberto',
+        dataPagamento: novoSaldo === 0 ? new Date().toISOString() : venda.dataPagamento
+      };
+    });
+  }
+
+  const vendasAtualizadas = aplicarPagamento(vendasCache);
+  const abertasAtualizadas = aplicarPagamento(abertasCache)
+    .filter(venda => venda.status === 'Em aberto');
+
+  salvarCacheLocal('vendasCache', vendasAtualizadas);
+  salvarCacheLocal('abertasCache', abertasAtualizadas);
+
+  adicionarFilaSync({
+    tipo: 'pagamento',
+    acao: 'criar',
+    dados: {
+      vendaId: id,
+      valorRecebido,
+      syncId
+    }
+  });
+
+  alert('Pagamento salvo offline. Será sincronizado quando a internet voltar.');
+
+  await carregarVendas();
+  await carregarAbertas();
+  atualizarStatusFilaSync();
+}
+
+function gerarRelatorioPeriodo(){
+  const dataInicial = document.getElementById('dataInicial').value;
+  const dataFinal = document.getElementById('dataFinal').value;
+
+  if(!dataInicial || !dataFinal){
+    alert('Informe a data inicial e final.');
+    return;
+  }
+
+  const vendas = carregarCacheLocal('vendasCache') || [];
+
+  const inicio = new Date(dataInicial + 'T00:00:00');
+  const fim = new Date(dataFinal + 'T23:59:59');
+
+  let totalVendas = 0;
+  let totalFaturamento = 0;
+  let totalLucro = 0;
+
+  vendas.forEach(venda => {
+    const dataVenda = new Date(venda.data);
+
+    if(dataVenda >= inicio && dataVenda <= fim){
+      totalVendas++;
+      totalFaturamento += Number(venda.valorTotal || 0);
+      totalLucro += Number(venda.lucro || 0);
+    }
+  });
+
+  document.getElementById('periodoVendas').innerText = totalVendas;
+  document.getElementById('periodoFaturamento').innerText = dinheiro(totalFaturamento);
+  document.getElementById('periodoLucro').innerText = dinheiro(totalLucro);
+}
+
 async function carregarVendas(){
-  const resposta = await fetch('/vendas');
-  const vendas = await resposta.json();
+  let vendas = [];
+
+  try{
+    const resposta = await fetch('/vendas');
+
+    if(!resposta.ok){
+      throw new Error('Erro ao buscar vendas');
+    }
+
+    vendas = await resposta.json();
+
+    salvarCacheLocal('vendasCache', vendas);
+
+  }catch{
+    vendas = carregarCacheLocal('vendasCache') || [];
+
+    console.log('Vendas carregadas do cache local.');
+  }
 
   let html = '';
   let totalFaturamento = 0;
@@ -840,9 +1704,9 @@ async function carregarVendas(){
   let lucroDoMes = 0;
   let abertoDoMes = 0;
 
-const hoje = new Date();
-const mesAtual = hoje.getMonth();
-const anoAtual = hoje.getFullYear();
+  const hoje = new Date();
+  const mesAtual = hoje.getMonth();
+  const anoAtual = hoje.getFullYear();
 
   const rankingProdutos = {};
   const rankingClientes = {};
@@ -852,24 +1716,27 @@ const anoAtual = hoje.getFullYear();
     totalLucro += Number(venda.lucro || 0);
     vendasTotais++;
 
-    rankingProdutos[venda.produtoNome] = (rankingProdutos[venda.produtoNome] || 0) + Number(venda.quantidade || 0);
-    rankingClientes[venda.clienteNome] = (rankingClientes[venda.clienteNome] || 0) + Number(venda.valorTotal || 0);
+    rankingProdutos[venda.produtoNome] =
+      (rankingProdutos[venda.produtoNome] || 0) + Number(venda.quantidade || 0);
+
+    rankingClientes[venda.clienteNome] =
+      (rankingClientes[venda.clienteNome] || 0) + Number(venda.valorTotal || 0);
 
     const data = new Date(venda.data).toLocaleDateString('pt-BR');
     const dataVendaObj = new Date(venda.data);
 
-if(
-  dataVendaObj.getMonth() === mesAtual &&
-  dataVendaObj.getFullYear() === anoAtual
-){
-  vendasDoMes++;
-  faturamentoDoMes += Number(venda.valorTotal || 0);
-  lucroDoMes += Number(venda.lucro || 0);
+    if(
+      dataVendaObj.getMonth() === mesAtual &&
+      dataVendaObj.getFullYear() === anoAtual
+    ){
+      vendasDoMes++;
+      faturamentoDoMes += Number(venda.valorTotal || 0);
+      lucroDoMes += Number(venda.lucro || 0);
 
-  if(venda.status === 'Em aberto'){
-    abertoDoMes += Number(venda.valorTotal || 0);
-  }
-}
+      if(venda.status === 'Em aberto'){
+        abertoDoMes += Number(venda.saldoRestante || venda.valorTotal || 0);
+      }
+    }
 
     html += `
       <tr>
@@ -913,49 +1780,156 @@ if(
   document.getElementById('produtoMaisVendido').innerText = produtoTop;
   document.getElementById('clienteMaisComprou').innerText = clienteTop;
   document.getElementById('vendasMes').innerText = vendasDoMes;
-document.getElementById('faturamentoMes').innerText = dinheiro(faturamentoDoMes);
-document.getElementById('lucroMes').innerText = dinheiro(lucroDoMes);
-document.getElementById('abertoMes').innerText = dinheiro(abertoDoMes);
+  document.getElementById('faturamentoMes').innerText = dinheiro(faturamentoDoMes);
+  document.getElementById('lucroMes').innerText = dinheiro(lucroDoMes);
+  document.getElementById('abertoMes').innerText = dinheiro(abertoDoMes);
 }
 
 async function registrarVenda(){
-  const cliente = document.getElementById('vendaCliente');
-  const produto = document.getElementById('vendaProduto');
-  const quantidade = document.getElementById('vendaQuantidade');
-  const status = document.getElementById('vendaStatus');
+  const clienteSelect = document.getElementById('vendaCliente');
+  const produtoSelect = document.getElementById('vendaProduto');
+  const quantidadeInput = document.getElementById('vendaQuantidade');
+  const statusSelect = document.getElementById('vendaStatus');
 
-  if(!cliente.value || !produto.value || !quantidade.value){
+  if(!clienteSelect.value || !produtoSelect.value || !quantidadeInput.value){
     alert('Preencha cliente, produto e quantidade.');
     return;
   }
 
-  const resposta = await fetch('/vendas',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      clienteId:Number(cliente.value),
-      produtoId:Number(produto.value),
-      quantidade:Number(quantidade.value),
-      status:status.value
-    })
-  });
+  const clienteId = Number(clienteSelect.value);
+  const produtoId = Number(produtoSelect.value);
+  const quantidade = Number(quantidadeInput.value);
+  const status = statusSelect.value;
+  const syncId = gerarSyncId('venda');
 
-  const dados = await resposta.json();
+  const clientesCache = carregarCacheLocal('clientesCache') || [];
+  const produtosCache = carregarCacheLocal('produtosCache') || [];
 
-  if(dados.erro){
-    alert(dados.erro);
+  const cliente = clientesCache.find(c => Number(c.id) === clienteId);
+  const produto = produtosCache.find(p => Number(p.id) === produtoId);
+
+  if(!cliente || !produto){
+    alert('Cliente ou produto não encontrado no cache.');
     return;
   }
 
-  quantidade.value='';
-
-  const gerarRecibo = confirm('Venda registrada com sucesso. Deseja imprimir o recibo?');
-
-  if(gerarRecibo){
-    await imprimirRecibo(dados);
+  if(Number(produto.quantidade || 0) < quantidade){
+    alert('Estoque insuficiente.');
+    return;
   }
 
-  carregar();
+  if(navigator.onLine){
+    try{
+      const resposta = await fetch('/vendas',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          clienteId,
+          produtoId,
+          quantidade,
+          status,
+          syncId
+})
+      });
+
+      const dados = await resposta.json();
+
+      if(dados.erro){
+        throw new Error(dados.erro);
+      }
+
+      quantidadeInput.value = '';
+
+      const gerarRecibo = confirm('Venda registrada com sucesso. Deseja imprimir o recibo?');
+
+      if(gerarRecibo){
+        await imprimirRecibo(dados);
+      }
+
+      await carregar();
+      return;
+
+    }catch(erro){
+      console.log('Erro online ao registrar venda. Salvando offline.', erro);
+    }
+  }
+
+  const dataVenda = new Date();
+
+  let dataVencimento = null;
+
+  if(status === 'Em aberto'){
+    dataVencimento = new Date(dataVenda);
+    dataVencimento.setDate(dataVencimento.getDate() + 30);
+  }
+
+  const valorTotal = Number(produto.precoVenda || 0) * quantidade;
+  const custoTotal = Number(produto.custo || 0) * quantidade;
+  const lucro = valorTotal - custoTotal;
+
+  const vendaOffline = {
+    id: Date.now(),
+    syncId,
+    clienteId,
+    clienteNome: cliente.nome,
+    produtoId,
+    produtoNome: produto.nome,
+    quantidade,
+    valorTotal,
+    custoTotal,
+    lucro,
+    status,
+    data: dataVenda.toISOString(),
+    dataPagamento: status === 'Pago' ? dataVenda.toISOString() : null,
+    dataVencimento: dataVencimento ? dataVencimento.toISOString() : null,
+    valorPago: status === 'Pago' ? valorTotal : 0,
+    saldoRestante: status === 'Pago' ? 0 : valorTotal,
+    pendenteSync: true
+  };
+
+  const vendasCache = carregarCacheLocal('vendasCache') || [];
+  vendasCache.unshift(vendaOffline);
+  salvarCacheLocal('vendasCache', vendasCache);
+
+  if(status === 'Em aberto'){
+    const abertasCache = carregarCacheLocal('abertasCache') || [];
+    abertasCache.unshift(vendaOffline);
+    salvarCacheLocal('abertasCache', abertasCache);
+  }
+
+  const novoEstoque = produtosCache.map(p => {
+    if(Number(p.id) === produtoId){
+      return {
+        ...p,
+        quantidade: Number(p.quantidade || 0) - quantidade
+      };
+    }
+
+    return p;
+  });
+
+  salvarCacheLocal('produtosCache', novoEstoque);
+
+  adicionarFilaSync({
+    tipo: 'venda',
+    acao: 'criar',
+    dados: {
+     clienteId,
+     produtoId,
+     quantidade,
+     status,
+     syncId
+  }
+});
+
+  quantidadeInput.value = '';
+
+  alert('Venda salva offline. Será sincronizada quando a internet voltar.');
+
+  await carregarProdutos();
+  await carregarVendas();
+  await carregarAbertas();
+  atualizarStatusFilaSync();
 }
 
 async function imprimirRecibo(venda){
@@ -1014,7 +1988,7 @@ async function imprimirRecibo(venda){
     });
 }
 
-      <//script>
+      <\/script>
 
       
     
@@ -1060,8 +2034,18 @@ function limparTelefone(telefone){
 }
 
 async function cobrarCliente(venda){
-  const resposta = await fetch('/clientes');
-  const clientes = await resposta.json();
+  let clientes = [];
+
+  try{
+    const resposta = await fetch('/clientes');
+    if(!resposta.ok){
+      throw new Error('Erro ao buscar clientes');
+    }
+    clientes = await resposta.json();
+    salvarCacheLocal('clientesCache', clientes);
+  }catch{
+    clientes = carregarCacheLocal('clientesCache') || [];
+  }
 
   const cliente = clientes.find(c => c.id === venda.clienteId);
 
@@ -1097,8 +2081,24 @@ Qualquer dúvida estou à disposição.`;
 }
 
 async function carregarAbertas(){
-  const resposta = await fetch('/vendas/abertas');
-  const abertas = await resposta.json();
+  let abertas = [];
+
+  try{
+    const resposta = await fetch('/vendas/abertas');
+
+    if(!resposta.ok){
+      throw new Error('Erro ao buscar vendas em aberto');
+    }
+
+    abertas = await resposta.json();
+
+    salvarCacheLocal('abertasCache', abertas);
+
+  }catch{
+    abertas = carregarCacheLocal('abertasCache') || [];
+
+    console.log('Fiado carregado do cache local.');
+  }
 
   let html = '';
   let total = 0;
@@ -1167,50 +2167,21 @@ async function carregarAbertas(){
   document.getElementById('cobrancas7Dias').innerText = total7Dias;
 }
 
-async function receberVenda(id, saldoAtual){
-  const valor = prompt(
-    `Saldo atual: ${dinheiro(saldoAtual)}\n\nDigite o valor recebido:`,
-    saldoAtual
-  );
-
-  if(!valor){
-    return;
-  }
-
-  const valorRecebido = Number(
-    String(valor).replace(',', '.')
-  );
-
-  if(!valorRecebido || valorRecebido <= 0){
-    alert('Valor inválido.');
-    return;
-  }
-
-  const resposta = await fetch(`/vendas/${id}/receber`, {
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json'
-    },
-    body:JSON.stringify({
-      valorRecebido:valorRecebido
-    })
-  });
-
-  const dados = await resposta.json();
-
-  if(dados.erro){
-    alert(dados.erro);
-    return;
-  }
-
-  alert('Pagamento registrado com sucesso.');
-
-  carregar();
-}
-
 async function carregarGraficoPizza(){
-  const resposta = await fetch('/vendas');
-  const vendas = await resposta.json();
+  let vendas = [];
+
+  try{
+    const resposta = await fetch('/vendas');
+
+    if(!resposta.ok){
+      throw new Error('Erro ao buscar vendas para gráfico');
+    }
+
+    vendas = await resposta.json();
+    salvarCacheLocal('vendasCache', vendas);
+  }catch{
+    vendas = carregarCacheLocal('vendasCache') || [];
+  }
 
   const vendasPorProduto = {};
 
@@ -1250,17 +2221,27 @@ async function carregarGraficoPizza(){
     }
   });
 }
-
 async function carregarEmpresa(){
-  const resposta = await fetch('/empresa');
-  const empresa = await resposta.json();
+  let empresa = {};
+
+  try{
+    const resposta = await fetch('/empresa');
+
+    if(!resposta.ok){
+      throw new Error('Erro ao buscar empresa');
+    }
+
+    empresa = await resposta.json();
+    salvarCacheLocal('empresaCache', empresa);
+  }catch{
+    empresa = carregarCacheLocal('empresaCache') || {};
+  }
 
   document.getElementById('empresaNome').value = empresa.nome || '';
   document.getElementById('empresaTelefone').value = empresa.telefone || '';
   document.getElementById('empresaEndereco').value = empresa.endereco || '';
   document.getElementById('empresaInstagram').value = empresa.instagram || '';
 }
-
 async function salvarEmpresa(){
   const resposta = await fetch('/empresa', {
     method:'POST',
@@ -1396,17 +2377,24 @@ document.addEventListener('DOMContentLoaded',function(){
 });
 
 async function carregarCategorias(){
+  let categorias = [];
 
-  const resposta =
-    await fetch('/categorias');
+  try{
+    const resposta = await fetch('/categorias');
 
-  const categorias =
-    await resposta.json();
+    if(!resposta.ok){
+      throw new Error('Erro ao buscar categorias');
+    }
+
+    categorias = await resposta.json();
+    salvarCacheLocal('categoriasCache', categorias);
+  }catch{
+    categorias = carregarCacheLocal('categoriasCache') || [];
+  }
 
   let html = '';
 
   categorias.forEach(categoria=>{
-
     html += `
       <li>
         ${categoria}
@@ -1420,13 +2408,10 @@ async function carregarCategorias(){
     `;
   });
 
-  document.getElementById(
-    'listaCategorias'
-  ).innerHTML = html;
+  document.getElementById('listaCategorias').innerHTML = html;
 
   atualizarSelectCategorias();
 }
-
 async function adicionarCategoria(){
 
   const nome =
@@ -1485,47 +2470,157 @@ async function removerCategoria(nome){
 }
 
 async function atualizarSelectCategorias(){
+  let categorias = [];
 
-  const resposta =
-    await fetch('/categorias');
+  try{
+    const resposta = await fetch('/categorias');
 
-  const categorias =
-    await resposta.json();
+    if(!resposta.ok){
+      throw new Error('Erro ao buscar categorias');
+    }
+
+    categorias = await resposta.json();
+    salvarCacheLocal('categoriasCache', categorias);
+  }catch{
+    categorias = carregarCacheLocal('categoriasCache') || [];
+  }
 
   let html = '';
 
   categorias.forEach(categoria=>{
-
     html += `
       <option value="${categoria}">
         ${categoria}
       </option>
     `;
-
   });
 
-  const selectCadastro =
-    document.getElementById(
-      'categoria'
-    );
-
-  const selectFiltro =
-    document.getElementById(
-      'filtroCategoria'
-    );
+  const selectCadastro = document.getElementById('categoria');
+  const selectFiltro = document.getElementById('filtroCategoria');
 
   if(selectCadastro){
     selectCadastro.innerHTML = html;
   }
 
   if(selectFiltro){
-    selectFiltro.innerHTML =
-      '<option value="">Todas Categorias</option>'
-      + html;
+    selectFiltro.innerHTML = '<option value="">Todas Categorias</option>' + html;
+  }
+}
+function atualizarStatusConexao(){
+  const status = document.getElementById('statusConexao');
+
+  if(!status){
+    return;
   }
 
+  if(navigator.onLine){
+    status.innerText = '🟢 Online';
+    status.className = 'status-online';
+  }else{
+    status.innerText = '🔴 Offline';
+    status.className = 'status-offline';
+  }
 }
 
+async function sincronizarFila(){
+  if(!navigator.onLine){
+    return;
+  }
+
+  let fila = carregarCacheLocal('filaSync') || [];
+
+  if(fila.length === 0){
+    atualizarStatusFilaSync();
+    return;
+  }
+
+  const novaFila = [];
+
+  for(const item of fila){
+    try{
+
+      if(item.tipo === 'cliente' && item.acao === 'criar'){
+        const resposta = await fetch('/clientes',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            nome:item.dados.nome,
+            telefone:item.dados.telefone,
+            endereco:item.dados.endereco,
+            observacoes:item.dados.observacoes
+          })
+        });
+
+        const dados = await resposta.json();
+
+        if(dados.erro){
+          throw new Error(dados.erro);
+        }
+      }
+
+      if(item.tipo === 'venda' && item.acao === 'criar'){
+        const resposta = await fetch('/vendas',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            clienteId:Number(item.dados.clienteId),
+            produtoId:Number(item.dados.produtoId),
+            quantidade:Number(item.dados.quantidade),
+            status:item.dados.status,
+            syncId:item.dados.syncId
+          })
+        });
+
+        const dados = await resposta.json();
+
+        if(dados.erro){
+          throw new Error(dados.erro);
+        }
+      }
+
+      if(item.tipo === 'pagamento' && item.acao === 'criar'){
+        const resposta = await fetch(`/vendas/${item.dados.vendaId}/receber`,{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            valorRecebido:Number(item.dados.valorRecebido),
+            syncId:item.dados.syncId
+          })
+        });
+
+        const dados = await resposta.json();
+
+        if(dados.erro){
+          throw new Error(dados.erro);
+        }
+      }
+
+    }catch(erro){
+      console.log('Erro ao sincronizar item:', item, erro);
+      novaFila.push(item);
+    }
+  }
+
+  salvarCacheLocal('filaSync', novaFila);
+  atualizarStatusFilaSync();
+
+  if(novaFila.length === 0){
+    alert('Dados offline sincronizados com sucesso.');
+    await carregar();
+  }
+}
+
+// REGISTRO GLOBAL DO PWA
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/service-worker.js')
+    .then(() => {
+      console.log('PWA ativado com sucesso');
+    })
+    .catch(erro => {
+      console.log('Erro ao ativar PWA:', erro);
+    });
+}
 
 </script>
 
