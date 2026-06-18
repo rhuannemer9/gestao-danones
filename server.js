@@ -1,8 +1,6 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
 const ExcelJS = require('exceljs');
-const ARQUIVO_CATEGORIAS = './dados/categorias.json';
 require('dotenv').config();
 
 const { createClient } = require('@supabase/supabase-js');
@@ -18,76 +16,42 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static('public'));
 
-const ARQUIVO_PRODUTOS = './dados/produtos.json';
-const ARQUIVO_CLIENTES = './dados/clientes.json';
-const ARQUIVO_VENDAS = './dados/vendas.json';
-const ARQUIVO_USUARIOS = './dados/usuarios.json';
-const ARQUIVO_EMPRESA = './dados/empresa.json';
+async function registrarEntradaCaixaAutomatica({ syncId, categoria, descricao, valor, dataMovimento }) {
+  const valorNumerico = Number(valor || 0);
 
-function carregarJson(arquivo) {
-  try {
-    const dados = fs.readFileSync(arquivo, 'utf8');
-    return JSON.parse(dados);
-  } catch {
-    return [];
+  if (!valorNumerico || valorNumerico <= 0) {
+    return;
   }
-}
 
-function salvarJson(arquivo, dados) {
-  fs.writeFileSync(arquivo, JSON.stringify(dados, null, 2));
-}
+  if (syncId) {
+    const { data: existente } = await supabase
+      .from('caixa')
+      .select('id')
+      .eq('sync_id', syncId)
+      .maybeSingle();
 
-function carregarProdutos() {
-  return carregarJson(ARQUIVO_PRODUTOS);
-}
-
-function salvarProdutos(produtos) {
-  salvarJson(ARQUIVO_PRODUTOS, produtos);
-}
-
-function carregarClientes() {
-  return carregarJson(ARQUIVO_CLIENTES);
-}
-
-function salvarClientes(clientes) {
-  salvarJson(ARQUIVO_CLIENTES, clientes);
-}
-
-function carregarVendas() {
-  return carregarJson(ARQUIVO_VENDAS);
-}
-
-function salvarVendas(vendas) {
-  salvarJson(ARQUIVO_VENDAS, vendas);
-}
-
-function carregarUsuarios() {
-  return carregarJson(ARQUIVO_USUARIOS);
-}
-
-function carregarEmpresa() {
-  try {
-    const dados = fs.readFileSync(ARQUIVO_EMPRESA, 'utf8');
-    return JSON.parse(dados);
-  } catch {
-    return {
-      nome: 'Gestão de Danones',
-      telefone: '',
-      endereco: '',
-      instagram: ''
-    };
+    if (existente) {
+      return;
+    }
   }
+
+  await supabase
+    .from('caixa')
+    .insert([{
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      sync_id: syncId || null,
+      tipo: 'ENTRADA',
+      categoria,
+      descricao,
+      valor: valorNumerico,
+      data_movimento: dataMovimento || new Date().toISOString()
+    }]);
 }
 
-function salvarEmpresa(empresa) {
-  fs.writeFileSync(ARQUIVO_EMPRESA, JSON.stringify(empresa, null, 2));
-}
-
-// LOGIN - SUPABASE
+// LOGIN
 
 app.post('/login', async (req, res) => {
-  const usuario = req.body.usuario;
-  const senha = req.body.senha;
+  const { usuario, senha } = req.body;
 
   const { data, error } = await supabase
     .from('usuarios')
@@ -97,9 +61,7 @@ app.post('/login', async (req, res) => {
     .single();
 
   if (error || !data) {
-    return res.status(401).json({
-      erro: 'Usuário ou senha incorretos'
-    });
+    return res.status(401).json({ erro: 'Usuário ou senha incorretos' });
   }
 
   res.json({
@@ -109,8 +71,7 @@ app.post('/login', async (req, res) => {
 });
 
 app.post('/alterar-senha', async (req, res) => {
-  const senhaAtual = req.body.senhaAtual;
-  const novaSenha = req.body.novaSenha;
+  const { senhaAtual, novaSenha } = req.body;
 
   const { data: usuarioEncontrado, error: erroBusca } = await supabase
     .from('usuarios')
@@ -119,9 +80,7 @@ app.post('/alterar-senha', async (req, res) => {
     .single();
 
   if (erroBusca || !usuarioEncontrado) {
-    return res.status(401).json({
-      erro: 'Senha atual incorreta'
-    });
+    return res.status(401).json({ erro: 'Senha atual incorreta' });
   }
 
   const { error } = await supabase
@@ -130,17 +89,13 @@ app.post('/alterar-senha', async (req, res) => {
     .eq('id', usuarioEncontrado.id);
 
   if (error) {
-    return res.status(500).json({
-      erro: error.message
-    });
+    return res.status(500).json({ erro: error.message });
   }
 
-  res.json({
-    mensagem: 'Senha alterada com sucesso'
-  });
+  res.json({ mensagem: 'Senha alterada com sucesso' });
 });
 
-// EMPRESA - SUPABASE
+// EMPRESA
 
 app.get('/empresa', async (req, res) => {
   const { data, error } = await supabase
@@ -149,7 +104,7 @@ app.get('/empresa', async (req, res) => {
     .eq('id', 1)
     .single();
 
-  if (error) {
+  if (error || !data) {
     return res.json({
       nome: 'Gestão de Danones',
       telefone: '',
@@ -182,9 +137,7 @@ app.post('/empresa', async (req, res) => {
     .single();
 
   if (error) {
-    return res.status(500).json({
-      erro: error.message
-    });
+    return res.status(500).json({ erro: error.message });
   }
 
   res.json({
@@ -200,14 +153,12 @@ app.post('/empresa', async (req, res) => {
 
 // PRODUTOS
 
-// PRODUTOS - SUPABASE
-
 app.get('/produtos', async (req, res) => {
   const { data, error } = await supabase
-.from('produtos')
-.select('*')
-.eq('ativo', true)
-.order('id', { ascending: false })
+    .from('produtos')
+    .select('*')
+    .eq('ativo', true)
+    .order('id', { ascending: false });
 
   if (error) {
     return res.status(500).json({ erro: error.message });
@@ -217,9 +168,9 @@ app.get('/produtos', async (req, res) => {
     id: p.id,
     nome: p.nome,
     categoria: p.categoria,
-    custo: Number(p.custo),
-    precoVenda: Number(p.preco_venda),
-    quantidade: p.quantidade,
+    custo: Number(p.custo || 0),
+    precoVenda: Number(p.preco_venda || 0),
+    quantidade: Number(p.quantidade || 0),
     validade: p.validade
   }));
 
@@ -231,10 +182,11 @@ app.post('/produtos', async (req, res) => {
     id: Date.now(),
     nome: req.body.nome,
     categoria: req.body.categoria || 'Danones',
-    custo: Number(req.body.custo),
-    preco_venda: Number(req.body.precoVenda),
-    quantidade: Number(req.body.quantidade),
-    validade: req.body.validade || null
+    custo: Number(req.body.custo || 0),
+    preco_venda: Number(req.body.precoVenda || 0),
+    quantidade: Number(req.body.quantidade || 0),
+    validade: req.body.validade || null,
+    ativo: true
   };
 
   const { data, error } = await supabase
@@ -251,9 +203,9 @@ app.post('/produtos', async (req, res) => {
     id: data.id,
     nome: data.nome,
     categoria: data.categoria,
-    custo: Number(data.custo),
-    precoVenda: Number(data.preco_venda),
-    quantidade: data.quantidade,
+    custo: Number(data.custo || 0),
+    precoVenda: Number(data.preco_venda || 0),
+    quantidade: Number(data.quantidade || 0),
     validade: data.validade
   });
 });
@@ -264,9 +216,9 @@ app.put('/produtos/:id', async (req, res) => {
   const produtoAtualizado = {
     nome: req.body.nome,
     categoria: req.body.categoria || 'Danones',
-    custo: Number(req.body.custo),
-    preco_venda: Number(req.body.precoVenda),
-    quantidade: Number(req.body.quantidade),
+    custo: Number(req.body.custo || 0),
+    preco_venda: Number(req.body.precoVenda || 0),
+    quantidade: Number(req.body.quantidade || 0),
     validade: req.body.validade || null
   };
 
@@ -296,19 +248,15 @@ app.delete('/produtos/:id', async (req, res) => {
     .eq('id', id);
 
   if (error) {
-    return res.status(500).json({
-      erro: error.message
-    });
+    return res.status(500).json({ erro: error.message });
   }
 
-  res.json({
-    mensagem: 'Produto desativado com sucesso'
-  });
+  res.json({ mensagem: 'Produto desativado com sucesso' });
 });
 
 app.post('/produtos/:id/entrada', async (req, res) => {
   const id = Number(req.params.id);
-  const quantidade = Number(req.body.quantidade);
+  const quantidade = Number(req.body.quantidade || 0);
 
   if (!quantidade || quantidade <= 0) {
     return res.status(400).json({ erro: 'Quantidade inválida' });
@@ -324,7 +272,7 @@ app.post('/produtos/:id/entrada', async (req, res) => {
     return res.status(404).json({ erro: 'Produto não encontrado' });
   }
 
-  const novaQuantidade = Number(produto.quantidade) + quantidade;
+  const novaQuantidade = Number(produto.quantidade || 0) + quantidade;
 
   const { data, error } = await supabase
     .from('produtos')
@@ -345,7 +293,7 @@ app.post('/produtos/:id/entrada', async (req, res) => {
 
 app.post('/produtos/:id/saida', async (req, res) => {
   const id = Number(req.params.id);
-  const quantidade = Number(req.body.quantidade);
+  const quantidade = Number(req.body.quantidade || 0);
 
   if (!quantidade || quantidade <= 0) {
     return res.status(400).json({ erro: 'Quantidade inválida' });
@@ -361,11 +309,11 @@ app.post('/produtos/:id/saida', async (req, res) => {
     return res.status(404).json({ erro: 'Produto não encontrado' });
   }
 
-  if (Number(produto.quantidade) < quantidade) {
+  if (Number(produto.quantidade || 0) < quantidade) {
     return res.status(400).json({ erro: 'Estoque insuficiente' });
   }
 
-  const novaQuantidade = Number(produto.quantidade) - quantidade;
+  const novaQuantidade = Number(produto.quantidade || 0) - quantidade;
 
   const { data, error } = await supabase
     .from('produtos')
@@ -384,7 +332,75 @@ app.post('/produtos/:id/saida', async (req, res) => {
   });
 });
 
-// CLIENTES - SUPABASE
+app.post('/produtos/:id/perda', async (req, res) => {
+  const id = Number(req.params.id);
+  const quantidade = Number(req.body.quantidade || 0);
+  const motivo = req.body.motivo || 'Perda';
+  const observacao = req.body.observacao || '';
+
+  if (!quantidade || quantidade <= 0) {
+    return res.status(400).json({ erro: 'Quantidade invalida' });
+  }
+
+  const { data: produto, error: erroBusca } = await supabase
+    .from('produtos')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (erroBusca || !produto) {
+    return res.status(404).json({ erro: 'Produto nao encontrado' });
+  }
+
+  if (Number(produto.quantidade || 0) < quantidade) {
+    return res.status(400).json({ erro: 'Estoque insuficiente' });
+  }
+
+  const novaQuantidade = Number(produto.quantidade || 0) - quantidade;
+
+  const { data, error } = await supabase
+    .from('produtos')
+    .update({ quantidade: novaQuantidade })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(500).json({ erro: error.message });
+  }
+
+  const valorPerda = Number(produto.custo || 0) * quantidade;
+
+  const { error: erroCaixa } = await supabase
+    .from('caixa')
+    .insert([{
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      sync_id: `perda-${Date.now()}-${id}`,
+      tipo: 'SAIDA',
+      categoria: 'Perda',
+      descricao: `Baixa de produto - ${motivo} - ${produto.nome}${observacao ? ' - ' + observacao : ''}`,
+      valor: valorPerda,
+      data_movimento: new Date().toISOString()
+    }]);
+
+  if (erroCaixa) {
+    return res.status(500).json({ erro: erroCaixa.message });
+  }
+
+  res.json({
+    mensagem: 'Baixa registrada com sucesso',
+    produto: data,
+    perda: {
+      produtoId: id,
+      produtoNome: produto.nome,
+      quantidade,
+      motivo,
+      observacao,
+      valor: valorPerda
+    }
+  });
+});
+// CLIENTES
 
 app.get('/clientes/:id/resumo', async (req, res) => {
   const id = Number(req.params.id);
@@ -396,9 +412,7 @@ app.get('/clientes/:id/resumo', async (req, res) => {
     .single();
 
   if (erroCliente || !cliente) {
-    return res.status(404).json({
-      erro: 'Cliente não encontrado'
-    });
+    return res.status(404).json({ erro: 'Cliente não encontrado' });
   }
 
   const { data: vendas, error: erroVendas } = await supabase
@@ -408,9 +422,7 @@ app.get('/clientes/:id/resumo', async (req, res) => {
     .order('data', { ascending: false });
 
   if (erroVendas) {
-    return res.status(500).json({
-      erro: erroVendas.message
-    });
+    return res.status(500).json({ erro: erroVendas.message });
   }
 
   const vendasFormatadas = vendas.map(v => ({
@@ -431,25 +443,9 @@ app.get('/clientes/:id/resumo', async (req, res) => {
     saldoRestante: Number(v.saldo_restante || 0)
   }));
 
-  const totalComprado = vendasFormatadas.reduce(
-    (soma, venda) => soma + Number(venda.valorTotal || 0),
-    0
-  );
-
-  const totalPago = vendasFormatadas.reduce(
-    (soma, venda) => soma + Number(venda.valorPago || 0),
-    0
-  );
-
-  const totalAberto = vendasFormatadas.reduce(
-    (soma, venda) => soma + Number(venda.saldoRestante || 0),
-    0
-  );
-
-  const ultimaCompra =
-    vendasFormatadas.length > 0
-      ? vendasFormatadas[0].data
-      : null;
+  const totalComprado = vendasFormatadas.reduce((soma, venda) => soma + Number(venda.valorTotal || 0), 0);
+  const totalPago = vendasFormatadas.reduce((soma, venda) => soma + Number(venda.valorPago || 0), 0);
+  const totalAberto = vendasFormatadas.reduce((soma, venda) => soma + Number(venda.saldoRestante || 0), 0);
 
   res.json({
     cliente: {
@@ -463,7 +459,7 @@ app.get('/clientes/:id/resumo', async (req, res) => {
     totalComprado,
     totalPago,
     totalAberto,
-    ultimaCompra,
+    ultimaCompra: vendasFormatadas.length > 0 ? vendasFormatadas[0].data : null,
     vendas: vendasFormatadas
   });
 });
@@ -569,7 +565,7 @@ app.delete('/clientes/:id', async (req, res) => {
   res.json({ mensagem: 'Cliente excluído com sucesso' });
 });
 
-// VENDAS - SUPABASE
+// VENDAS
 
 app.get('/vendas/:id/pagamentos', async (req, res) => {
   const id = Number(req.params.id);
@@ -581,9 +577,30 @@ app.get('/vendas/:id/pagamentos', async (req, res) => {
     .order('data_pagamento', { ascending: false });
 
   if (error) {
-    return res.status(500).json({
-      erro: error.message
-    });
+    return res.status(500).json({ erro: error.message });
+  }
+
+  res.json(data.map(p => ({
+    id: p.id,
+    vendaId: p.venda_id,
+    clienteId: p.cliente_id,
+    clienteNome: p.cliente_nome,
+    valor: Number(p.valor || 0),
+    dataPagamento: p.data_pagamento
+  })));
+});
+
+app.get('/pagamentos-venda/:id', async (req, res) => {
+  const id = Number(req.params.id);
+
+  const { data, error } = await supabase
+    .from('pagamentos')
+    .select('*')
+    .eq('venda_id', id)
+    .order('data_pagamento', { ascending: false });
+
+  if (error) {
+    return res.status(500).json({ erro: error.message });
   }
 
   res.json(data.map(p => ({
@@ -664,11 +681,30 @@ app.post('/vendas', async (req, res) => {
   const produtoId = Number(req.body.produtoId);
   const quantidade = Number(req.body.quantidade);
   const status = req.body.status || 'Pago';
+  const clienteAvulso = clienteId === 0;
 
-  if (!clienteId || !produtoId || !quantidade || quantidade <= 0) {
-    return res.status(400).json({
-      erro: 'Dados da venda inválidos'
-    });
+  if ((!clienteId && !clienteAvulso) || !produtoId || !quantidade || quantidade <= 0) {
+    return res.status(400).json({ erro: 'Dados da venda invalidos' });
+  }
+
+  if (clienteAvulso && status !== 'Pago') {
+    return res.status(400).json({ erro: 'Cliente avulso so pode ser usado em venda paga' });
+  }
+
+  if (req.body.syncId) {
+    const { data: vendaExistente } = await supabase
+      .from('vendas')
+      .select('*')
+      .eq('sync_id', req.body.syncId)
+      .maybeSingle();
+
+    if (vendaExistente) {
+      return res.status(200).json({
+        id: vendaExistente.id,
+        mensagem: 'Venda já sincronizada',
+        duplicada: true
+      });
+    }
   }
 
   const { data: produto, error: erroProduto } = await supabase
@@ -678,27 +714,30 @@ app.post('/vendas', async (req, res) => {
     .single();
 
   if (erroProduto || !produto) {
-    return res.status(404).json({
-      erro: 'Produto não encontrado'
-    });
+    return res.status(404).json({ erro: 'Produto não encontrado' });
   }
 
-  const { data: cliente, error: erroCliente } = await supabase
-    .from('clientes')
-    .select('*')
-    .eq('id', clienteId)
-    .single();
+  let cliente = {
+    id: 0,
+    nome: req.body.clienteNome || 'Cliente Avulso'
+  };
 
-  if (erroCliente || !cliente) {
-    return res.status(404).json({
-      erro: 'Cliente não encontrado'
-    });
+  if (!clienteAvulso) {
+    const { data: clienteEncontrado, error: erroCliente } = await supabase
+      .from('clientes')
+      .select('*')
+      .eq('id', clienteId)
+      .single();
+
+    if (erroCliente || !clienteEncontrado) {
+      return res.status(404).json({ erro: 'Cliente nao encontrado' });
+    }
+
+    cliente = clienteEncontrado;
   }
 
-  if (Number(produto.quantidade) < quantidade) {
-    return res.status(400).json({
-      erro: 'Estoque insuficiente'
-    });
+  if (Number(produto.quantidade || 0) < quantidade) {
+    return res.status(400).json({ erro: 'Estoque insuficiente' });
   }
 
   const valorTotal = Number(produto.preco_venda || 0) * quantidade;
@@ -712,9 +751,7 @@ app.post('/vendas', async (req, res) => {
     .eq('id', produtoId);
 
   if (erroEstoque) {
-    return res.status(500).json({
-      erro: erroEstoque.message
-    });
+    return res.status(500).json({ erro: erroEstoque.message });
   }
 
   const dataVenda = new Date();
@@ -744,22 +781,6 @@ app.post('/vendas', async (req, res) => {
     saldo_restante: status === 'Pago' ? 0 : valorTotal
   };
 
-  if(req.body.syncId){
-  const { data: vendaExistente } = await supabase
-    .from('vendas')
-    .select('*')
-    .eq('sync_id', req.body.syncId)
-    .maybeSingle();
-
-  if(vendaExistente){
-    return res.status(200).json({
-      id: vendaExistente.id,
-      mensagem: 'Venda já sincronizada',
-      duplicada: true
-    });
-  }
-}
-
   const { data, error } = await supabase
     .from('vendas')
     .insert([novaVenda])
@@ -767,8 +788,16 @@ app.post('/vendas', async (req, res) => {
     .single();
 
   if (error) {
-    return res.status(500).json({
-      erro: error.message
+    return res.status(500).json({ erro: error.message });
+  }
+
+  if (data.status === 'Pago') {
+    await registrarEntradaCaixaAutomatica({
+      syncId: data.sync_id ? `caixa-venda-${data.sync_id}` : `caixa-venda-${data.id}`,
+      categoria: 'Venda',
+      descricao: `Venda paga - ${data.cliente_nome} - ${data.produto_nome}`,
+      valor: data.valor_total,
+      dataMovimento: data.data
     });
   }
 
@@ -791,14 +820,149 @@ app.post('/vendas', async (req, res) => {
   });
 });
 
+app.put('/vendas/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  const clienteId = Number(req.body.clienteId);
+  const status = req.body.status || 'Pago';
+  const clienteAvulso = clienteId === 0;
+
+  if ((!clienteId && !clienteAvulso) || !['Pago', 'Em aberto'].includes(status)) {
+    return res.status(400).json({ erro: 'Dados da venda invalidos' });
+  }
+
+  if (clienteAvulso && status !== 'Pago') {
+    return res.status(400).json({ erro: 'Cliente avulso so pode ser usado em venda paga' });
+  }
+
+  const { data: vendaAtual, error: erroVenda } = await supabase
+    .from('vendas')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (erroVenda || !vendaAtual) {
+    return res.status(404).json({ erro: 'Venda nao encontrada' });
+  }
+
+  let cliente = {
+    id: 0,
+    nome: req.body.clienteNome || 'Cliente Avulso'
+  };
+
+  if (!clienteAvulso) {
+    const { data: clienteEncontrado, error: erroCliente } = await supabase
+      .from('clientes')
+      .select('*')
+      .eq('id', clienteId)
+      .single();
+
+    if (erroCliente || !clienteEncontrado) {
+      return res.status(404).json({ erro: 'Cliente nao encontrado' });
+    }
+
+    cliente = clienteEncontrado;
+  }
+
+  const valorTotal = Number(vendaAtual.valor_total || 0);
+  let dataVencimento = vendaAtual.data_vencimento;
+
+  if (status === 'Em aberto' && !dataVencimento) {
+    const base = vendaAtual.data ? new Date(vendaAtual.data) : new Date();
+    base.setDate(base.getDate() + 30);
+    dataVencimento = base.toISOString();
+  }
+
+  const vendaAtualizada = {
+    cliente_id: cliente.id,
+    cliente_nome: cliente.nome,
+    status,
+    data_vencimento: status === 'Em aberto' ? dataVencimento : null,
+    valor_pago: status === 'Pago' ? valorTotal : 0,
+    saldo_restante: status === 'Pago' ? 0 : valorTotal,
+    data_pagamento: status === 'Pago' ? (vendaAtual.data_pagamento || new Date().toISOString()) : null
+  };
+
+  const { data, error } = await supabase
+    .from('vendas')
+    .update(vendaAtualizada)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(500).json({ erro: error.message });
+  }
+
+  const caixaSyncId = vendaAtual.sync_id ? `caixa-venda-${vendaAtual.sync_id}` : `caixa-venda-${vendaAtual.id}`;
+
+  if (status === 'Pago') {
+    await registrarEntradaCaixaAutomatica({
+      syncId: caixaSyncId,
+      categoria: 'Venda',
+      descricao: `Venda paga - ${data.cliente_nome} - ${data.produto_nome}`,
+      valor: data.valor_total,
+      dataMovimento: data.data
+    });
+  }
+
+  if (status === 'Em aberto') {
+    const { data: pagamentosVenda } = await supabase
+      .from('pagamentos')
+      .select('sync_id')
+      .eq('venda_id', id);
+
+    if (pagamentosVenda && pagamentosVenda.length > 0) {
+      const syncIdsCaixaPagamentos = pagamentosVenda
+        .filter(pagamento => pagamento.sync_id)
+        .map(pagamento => `caixa-pagamento-${pagamento.sync_id}`);
+
+      if (syncIdsCaixaPagamentos.length > 0) {
+        await supabase
+          .from('caixa')
+          .delete()
+          .in('sync_id', syncIdsCaixaPagamentos);
+      }
+
+      await supabase
+        .from('pagamentos')
+        .delete()
+        .eq('venda_id', id);
+    }
+
+    await supabase
+      .from('caixa')
+      .delete()
+      .eq('sync_id', caixaSyncId);
+  }
+
+  res.json({
+    mensagem: 'Venda atualizada com sucesso',
+    venda: {
+      id: data.id,
+      clienteId: data.cliente_id,
+      clienteNome: data.cliente_nome,
+      produtoId: data.produto_id,
+      produtoNome: data.produto_nome,
+      quantidade: data.quantidade,
+      valorTotal: Number(data.valor_total || 0),
+      custoTotal: Number(data.custo_total || 0),
+      lucro: Number(data.lucro || 0),
+      status: data.status,
+      data: data.data,
+      dataPagamento: data.data_pagamento,
+      dataVencimento: data.data_vencimento,
+      valorPago: Number(data.valor_pago || 0),
+      saldoRestante: Number(data.saldo_restante || 0)
+    }
+  });
+});
+
 app.post('/vendas/:id/receber', async (req, res) => {
   const id = Number(req.params.id);
   const valorRecebido = Number(req.body.valorRecebido || 0);
 
   if (!valorRecebido || valorRecebido <= 0) {
-    return res.status(400).json({
-      erro: 'Valor recebido inválido'
-    });
+    return res.status(400).json({ erro: 'Valor recebido inválido' });
   }
 
   const { data: venda, error: erroBusca } = await supabase
@@ -808,9 +972,22 @@ app.post('/vendas/:id/receber', async (req, res) => {
     .single();
 
   if (erroBusca || !venda) {
-    return res.status(404).json({
-      erro: 'Venda não encontrada'
-    });
+    return res.status(404).json({ erro: 'Venda não encontrada' });
+  }
+
+  if (req.body.syncId) {
+    const { data: pagamentoExistente } = await supabase
+      .from('pagamentos')
+      .select('*')
+      .eq('sync_id', req.body.syncId)
+      .maybeSingle();
+
+    if (pagamentoExistente) {
+      return res.status(200).json({
+        mensagem: 'Pagamento já sincronizado',
+        duplicado: true
+      });
+    }
   }
 
   const valorTotal = Number(venda.valor_total || 0);
@@ -821,33 +998,21 @@ app.post('/vendas/:id/receber', async (req, res) => {
   const novoSaldo = Math.max(valorTotal - valorPagoFinal, 0);
   const novoStatus = novoSaldo === 0 ? 'Pago' : 'Em aberto';
 
-  const { error: erroPagamentoSync } = await supabase
+  const { error: erroPagamento } = await supabase
     .from('pagamentos')
-    if(req.body.syncId){
-  const { data: pagamentoExistente } = await supabase
-    .from('pagamentos')
-    .select('*')
-    .eq('sync_id', req.body.syncId)
-    .maybeSingle();
+    .insert([{
+      id: Date.now(),
+      sync_id: req.body.syncId || null,
+      venda_id: id,
+      cliente_id: venda.cliente_id,
+      cliente_nome: venda.cliente_nome,
+      valor: valorRecebido,
+      data_pagamento: new Date().toISOString()
+    }]);
 
-  if(pagamentoExistente){
-    return res.status(200).json({
-      mensagem: 'Pagamento já sincronizado',
-      duplicado: true
-    });
+  if (erroPagamento) {
+    return res.status(500).json({ erro: erroPagamento.message });
   }
-}
- const { error: erroPagamento } = await supabase
-  .from('pagamentos')
-  .insert([{
-    id: Date.now(),
-    sync_id: req.body.syncId || null,
-    venda_id: id,
-    cliente_id: venda.cliente_id,
-    cliente_nome: venda.cliente_nome,
-    valor: valorRecebido,
-    data_pagamento: new Date().toISOString()
-  }]);
 
   const { data, error } = await supabase
     .from('vendas')
@@ -862,10 +1027,16 @@ app.post('/vendas/:id/receber', async (req, res) => {
     .single();
 
   if (error) {
-    return res.status(500).json({
-      erro: error.message
-    });
+    return res.status(500).json({ erro: error.message });
   }
+
+  await registrarEntradaCaixaAutomatica({
+    syncId: req.body.syncId ? `caixa-pagamento-${req.body.syncId}` : `caixa-pagamento-${id}-${Date.now()}`,
+    categoria: 'Recebimento',
+    descricao: `Recebimento fiado - ${venda.cliente_nome}`,
+    valor: valorRecebido,
+    dataMovimento: new Date().toISOString()
+  });
 
   res.json({
     mensagem: 'Pagamento registrado com sucesso',
@@ -882,49 +1053,179 @@ app.post('/vendas/:id/receber', async (req, res) => {
 app.delete('/vendas/:id', async (req, res) => {
   const id = Number(req.params.id);
 
+  const { data: venda, error: erroVenda } = await supabase
+    .from('vendas')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (erroVenda || !venda) {
+    return res.status(404).json({ erro: 'Venda nao encontrada' });
+  }
+
+  const { data: produto, error: erroProduto } = await supabase
+    .from('produtos')
+    .select('*')
+    .eq('id', venda.produto_id)
+    .single();
+
+  if (erroProduto || !produto) {
+    return res.status(404).json({ erro: 'Produto da venda nao encontrado' });
+  }
+
+  const quantidadeRestaurada = Number(venda.quantidade || 0);
+  const novaQuantidadeProduto = Number(produto.quantidade || 0) + quantidadeRestaurada;
+
+  const { error: erroEstoque } = await supabase
+    .from('produtos')
+    .update({
+      quantidade: novaQuantidadeProduto
+    })
+    .eq('id', venda.produto_id);
+
+  if (erroEstoque) {
+    return res.status(500).json({ erro: erroEstoque.message });
+  }
+
+  const { data: pagamentosVenda } = await supabase
+    .from('pagamentos')
+    .select('sync_id')
+    .eq('venda_id', id);
+
+  const syncIdsCaixa = [];
+  const caixaVendaSyncId = venda.sync_id ? `caixa-venda-${venda.sync_id}` : `caixa-venda-${venda.id}`;
+
+  syncIdsCaixa.push(caixaVendaSyncId);
+
+  if (pagamentosVenda && pagamentosVenda.length > 0) {
+    pagamentosVenda
+      .filter(pagamento => pagamento.sync_id)
+      .forEach(pagamento => syncIdsCaixa.push(`caixa-pagamento-${pagamento.sync_id}`));
+  }
+
+  const { error: erroCaixa } = await supabase
+    .from('caixa')
+    .delete()
+    .in('sync_id', syncIdsCaixa);
+
+  if (erroCaixa) {
+    return res.status(500).json({ erro: erroCaixa.message });
+  }
+
+  const { error: erroPagamentos } = await supabase
+    .from('pagamentos')
+    .delete()
+    .eq('venda_id', id);
+
+  if (erroPagamentos) {
+    return res.status(500).json({ erro: erroPagamentos.message });
+  }
+
   const { error } = await supabase
     .from('vendas')
     .delete()
     .eq('id', id);
 
   if (error) {
-    return res.status(500).json({
-      erro: error.message
-    });
+    return res.status(500).json({ erro: error.message });
   }
 
   res.json({
-    mensagem: 'Venda excluída com sucesso'
+    mensagem: 'Venda excluida com sucesso',
+    estoqueRestaurado: {
+      produtoId: venda.produto_id,
+      quantidadeRestaurada,
+      novaQuantidade: novaQuantidadeProduto
+    },
+    caixaRemovido: syncIdsCaixa
   });
 });
 
-// BACKUP - SUPABASE
+// CAIXA
+
+app.get('/caixa', async (req, res) => {
+  const { data, error } = await supabase
+    .from('caixa')
+    .select('*')
+    .order('data_movimento', { ascending: false });
+
+  if (error) {
+    return res.status(500).json({ erro: error.message });
+  }
+
+  res.json(data);
+});
+
+app.post('/caixa', async (req, res) => {
+  const novaMovimentacao = {
+    id: Date.now(),
+    sync_id: req.body.syncId || null,
+    tipo: req.body.tipo,
+    categoria: req.body.categoria,
+    descricao: req.body.descricao,
+    valor: Number(req.body.valor || 0),
+    data_movimento: req.body.dataMovimento || new Date().toISOString()
+  };
+
+  if (!novaMovimentacao.tipo || !novaMovimentacao.valor) {
+    return res.status(400).json({ erro: 'Dados inválidos' });
+  }
+
+  if (req.body.syncId) {
+    const { data: existente } = await supabase
+      .from('caixa')
+      .select('*')
+      .eq('sync_id', req.body.syncId)
+      .maybeSingle();
+
+    if (existente) {
+      return res.status(200).json({
+        mensagem: 'Movimentação já sincronizada',
+        duplicada: true
+      });
+    }
+  }
+
+  const { data, error } = await supabase
+    .from('caixa')
+    .insert([novaMovimentacao])
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(500).json({ erro: error.message });
+  }
+
+  res.status(201).json(data);
+});
+
+app.delete('/caixa/:id', async (req, res) => {
+  const id = Number(req.params.id);
+
+  const { error } = await supabase
+    .from('caixa')
+    .delete()
+    .eq('id', id);
+
+  if (error) {
+    return res.status(500).json({ erro: error.message });
+  }
+
+  res.json({ mensagem: 'Movimentação excluída com sucesso' });
+});
+
+// BACKUP
 
 app.get('/backup', async (req, res) => {
-  const { data: produtos, error: erroProdutos } = await supabase
-    .from('produtos')
-    .select('*');
+  const { data: produtos, error: erroProdutos } = await supabase.from('produtos').select('*');
+  const { data: clientes, error: erroClientes } = await supabase.from('clientes').select('*');
+  const { data: vendas, error: erroVendas } = await supabase.from('vendas').select('*');
+  const { data: categorias, error: erroCategorias } = await supabase.from('categorias').select('*');
+  const { data: empresa, error: erroEmpresa } = await supabase.from('empresa').select('*');
+  const { data: caixa, error: erroCaixa } = await supabase.from('caixa').select('*');
 
-  const { data: clientes, error: erroClientes } = await supabase
-    .from('clientes')
-    .select('*');
-
-  const { data: vendas, error: erroVendas } = await supabase
-    .from('vendas')
-    .select('*');
-
-  const { data: categorias, error: erroCategorias } = await supabase
-    .from('categorias')
-    .select('*');
-
-  const { data: empresa, error: erroEmpresa } = await supabase
-    .from('empresa')
-    .select('*');
-
-  if (erroProdutos || erroClientes || erroVendas || erroCategorias || erroEmpresa) {
-    return res.status(500).json({
-      erro: 'Erro ao gerar backup'
-    });
+  if (erroProdutos || erroClientes || erroVendas || erroCategorias || erroEmpresa || erroCaixa) {
+    return res.status(500).json({ erro: 'Erro ao gerar backup' });
   }
 
   res.json({
@@ -933,6 +1234,7 @@ app.get('/backup', async (req, res) => {
     vendas,
     categorias,
     empresa,
+    caixa,
     geradoEm: new Date().toISOString()
   });
 });
@@ -941,22 +1243,17 @@ app.post('/restaurar-backup', async (req, res) => {
   const backup = req.body;
 
   if (!backup.produtos || !backup.clientes || !backup.vendas) {
-    return res.status(400).json({
-      erro: 'Arquivo de backup inválido'
-    });
+    return res.status(400).json({ erro: 'Arquivo de backup inválido' });
   }
 
+  await supabase.from('pagamentos').delete().neq('id', 0);
   await supabase.from('vendas').delete().neq('id', 0);
   await supabase.from('produtos').delete().neq('id', 0);
   await supabase.from('clientes').delete().neq('id', 0);
 
-  if (backup.categorias) {
-    await supabase.from('categorias').delete().neq('id', 0);
-  }
-
-  if (backup.empresa) {
-    await supabase.from('empresa').delete().neq('id', 0);
-  }
+  if (backup.caixa) await supabase.from('caixa').delete().neq('id', 0);
+  if (backup.categorias) await supabase.from('categorias').delete().neq('id', 0);
+  if (backup.empresa) await supabase.from('empresa').delete().neq('id', 0);
 
   if (backup.produtos.length > 0) {
     const { error } = await supabase.from('produtos').insert(backup.produtos);
@@ -983,11 +1280,15 @@ app.post('/restaurar-backup', async (req, res) => {
     if (error) return res.status(500).json({ erro: error.message });
   }
 
-  res.json({
-    mensagem: 'Backup restaurado com sucesso'
-  });
+  if (backup.caixa && backup.caixa.length > 0) {
+    const { error } = await supabase.from('caixa').insert(backup.caixa);
+    if (error) return res.status(500).json({ erro: error.message });
+  }
+
+  res.json({ mensagem: 'Backup restaurado com sucesso' });
 });
-// EXCEL - SUPABASE
+
+// EXCEL
 
 app.get('/excel/produtos', async (req, res) => {
   const { data: produtos, error } = await supabase
@@ -1012,19 +1313,10 @@ app.get('/excel/produtos', async (req, res) => {
     { header: 'Validade', key: 'validade', width: 15 }
   ];
 
-  produtos.forEach(produto => {
-    sheet.addRow(produto);
-  });
+  produtos.forEach(produto => sheet.addRow(produto));
 
-  res.setHeader(
-    'Content-Type',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  );
-
-  res.setHeader(
-    'Content-Disposition',
-    'attachment; filename=produtos.xlsx'
-  );
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename=produtos.xlsx');
 
   await workbook.xlsx.write(res);
   res.end();
@@ -1052,19 +1344,10 @@ app.get('/excel/clientes', async (req, res) => {
     { header: 'Criado em', key: 'criado_em', width: 25 }
   ];
 
-  clientes.forEach(cliente => {
-    sheet.addRow(cliente);
-  });
+  clientes.forEach(cliente => sheet.addRow(cliente));
 
-  res.setHeader(
-    'Content-Type',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  );
-
-  res.setHeader(
-    'Content-Disposition',
-    'attachment; filename=clientes.xlsx'
-  );
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename=clientes.xlsx');
 
   await workbook.xlsx.write(res);
   res.end();
@@ -1096,26 +1379,16 @@ app.get('/excel/vendas', async (req, res) => {
     { header: 'Data Pagamento', key: 'data_pagamento', width: 25 }
   ];
 
-  vendas.forEach(venda => {
-    sheet.addRow(venda);
-  });
+  vendas.forEach(venda => sheet.addRow(venda));
 
-  res.setHeader(
-    'Content-Type',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  );
-
-  res.setHeader(
-    'Content-Disposition',
-    'attachment; filename=vendas.xlsx'
-  );
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', 'attachment; filename=vendas.xlsx');
 
   await workbook.xlsx.write(res);
   res.end();
 });
-// SERVIDOR
 
-// CATEGORIAS - SUPABASE
+// CATEGORIAS
 
 app.get('/categorias', async (req, res) => {
   const { data, error } = await supabase
@@ -1124,23 +1397,17 @@ app.get('/categorias', async (req, res) => {
     .order('nome', { ascending: true });
 
   if (error) {
-    return res.status(500).json({
-      erro: error.message
-    });
+    return res.status(500).json({ erro: error.message });
   }
 
-  const categorias = data.map(c => c.nome);
-
-  res.json(categorias);
+  res.json(data.map(c => c.nome));
 });
 
 app.post('/categorias', async (req, res) => {
   const nome = req.body.nome;
 
   if (!nome) {
-    return res.status(400).json({
-      erro: 'Informe o nome da categoria'
-    });
+    return res.status(400).json({ erro: 'Informe o nome da categoria' });
   }
 
   const { error } = await supabase
@@ -1148,14 +1415,10 @@ app.post('/categorias', async (req, res) => {
     .insert([{ nome }]);
 
   if (error) {
-    return res.status(500).json({
-      erro: error.message
-    });
+    return res.status(500).json({ erro: error.message });
   }
 
-  res.json({
-    mensagem: 'Categoria criada com sucesso'
-  });
+  res.json({ mensagem: 'Categoria criada com sucesso' });
 });
 
 app.delete('/categorias/:nome', async (req, res) => {
@@ -1167,15 +1430,13 @@ app.delete('/categorias/:nome', async (req, res) => {
     .eq('nome', nome);
 
   if (error) {
-    return res.status(500).json({
-      erro: error.message
-    });
+    return res.status(500).json({ erro: error.message });
   }
 
-  res.json({
-    mensagem: 'Categoria removida'
-  });
+  res.json({ mensagem: 'Categoria removida' });
 });
+
+// TESTE
 
 app.get('/teste-supabase', async (req, res) => {
   const { data, error } = await supabase
@@ -1183,9 +1444,7 @@ app.get('/teste-supabase', async (req, res) => {
     .select('*');
 
   if (error) {
-    return res.status(500).json({
-      erro: error.message
-    });
+    return res.status(500).json({ erro: error.message });
   }
 
   res.json({
@@ -1194,31 +1453,14 @@ app.get('/teste-supabase', async (req, res) => {
   });
 });
 
-app.get('/pagamentos-venda/:id', async (req, res) => {
-  const id = Number(req.params.id);
+// SERVIDOR
 
-  const { data, error } = await supabase
-    .from('pagamentos')
-    .select('*')
-    .eq('venda_id', id)
-    .order('data_pagamento', { ascending: false });
+const PORT = process.env.PORT || 3001;
 
-  if (error) {
-    return res.status(500).json({
-      erro: error.message
-    });
-  }
-
-  res.json(data.map(p => ({
-    id: p.id,
-    vendaId: p.venda_id,
-    clienteId: p.cliente_id,
-    clienteNome: p.cliente_nome,
-    valor: Number(p.valor || 0),
-    dataPagamento: p.data_pagamento
-  })));
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
 });
 
-app.listen(3001, () => {
-  console.log('Servidor rodando na porta 3001');
-});
+
+
+
