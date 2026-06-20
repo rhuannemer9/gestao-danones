@@ -48,6 +48,38 @@ async function registrarEntradaCaixaAutomatica({ syncId, categoria, descricao, v
     }]);
 }
 
+async function registrarSaidaCaixaAutomatica({ syncId, categoria, descricao, valor, dataMovimento }) {
+  const valorNumerico = Number(valor || 0);
+
+  if (!valorNumerico || valorNumerico <= 0) {
+    return;
+  }
+
+  if (syncId) {
+    const { data: existente } = await supabase
+      .from('caixa')
+      .select('id')
+      .eq('sync_id', syncId)
+      .maybeSingle();
+
+    if (existente) {
+      return;
+    }
+  }
+
+  await supabase
+    .from('caixa')
+    .insert([{
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      sync_id: syncId || null,
+      tipo: 'SAIDA',
+      categoria,
+      descricao,
+      valor: valorNumerico,
+      data_movimento: dataMovimento || new Date().toISOString()
+    }]);
+}
+
 async function obterClienteParaVenda({ clienteId, clienteNome, clienteAvulso }) {
   if (!clienteAvulso) {
     const { data: clienteEncontrado, error: erroCliente } = await supabase
@@ -1299,6 +1331,338 @@ app.delete('/vendas/:id', async (req, res) => {
   });
 });
 
+// FORNECEDORES
+
+function mapearFornecedor(fornecedor) {
+  return {
+    id: fornecedor.id,
+    nome: fornecedor.nome,
+    contato: fornecedor.contato || '',
+    observacoes: fornecedor.observacoes || '',
+    criadoEm: fornecedor.criado_em
+  };
+}
+
+function mapearCompraFornecedor(compra) {
+  return {
+    id: compra.id,
+    fornecedorId: compra.fornecedor_id,
+    fornecedorNome: compra.fornecedor_nome,
+    produtoId: compra.produto_id,
+    produtoNome: compra.produto_nome,
+    quantidade: Number(compra.quantidade || 0),
+    valorTotal: Number(compra.valor_total || 0),
+    valorPago: Number(compra.valor_pago || 0),
+    saldoRestante: Number(compra.saldo_restante || 0),
+    status: compra.status,
+    formaPagamento: compra.forma_pagamento,
+    data: compra.data_compra,
+    vencimento: compra.vencimento,
+    observacao: compra.observacao || '',
+    atualizouEstoque: Boolean(compra.atualizou_estoque),
+    lancouCaixa: Boolean(compra.lancou_caixa),
+    syncId: compra.sync_id,
+    caixaSyncId: compra.caixa_sync_id
+  };
+}
+
+app.get('/fornecedores', async (req, res) => {
+  const { data, error } = await supabase
+    .from('fornecedores')
+    .select('*')
+    .eq('ativo', true)
+    .order('nome', { ascending: true });
+
+  if (error) {
+    return res.status(500).json({ erro: error.message });
+  }
+
+  res.json(data.map(mapearFornecedor));
+});
+
+app.post('/fornecedores', async (req, res) => {
+  const nome = String(req.body.nome || '').trim();
+
+  if (!nome) {
+    return res.status(400).json({ erro: 'Informe o nome do fornecedor' });
+  }
+
+  const { data, error } = await supabase
+    .from('fornecedores')
+    .insert([{
+      id: Date.now(),
+      nome,
+      contato: req.body.contato || '',
+      observacoes: req.body.observacoes || '',
+      criado_em: new Date().toISOString(),
+      ativo: true
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(500).json({ erro: error.message });
+  }
+
+  res.status(201).json(mapearFornecedor(data));
+});
+
+app.delete('/fornecedores/:id', async (req, res) => {
+  const id = Number(req.params.id);
+
+  const { data: compras } = await supabase
+    .from('compras_fornecedores')
+    .select('id')
+    .eq('fornecedor_id', id)
+    .eq('ativo', true)
+    .limit(1);
+
+  if (compras && compras.length > 0) {
+    return res.status(400).json({ erro: 'Este fornecedor possui compras registradas' });
+  }
+
+  const { error } = await supabase
+    .from('fornecedores')
+    .update({ ativo: false })
+    .eq('id', id);
+
+  if (error) {
+    return res.status(500).json({ erro: error.message });
+  }
+
+  res.json({ mensagem: 'Fornecedor excluido com sucesso' });
+});
+
+app.get('/compras-fornecedores', async (req, res) => {
+  const { data, error } = await supabase
+    .from('compras_fornecedores')
+    .select('*')
+    .eq('ativo', true)
+    .order('data_compra', { ascending: false });
+
+  if (error) {
+    return res.status(500).json({ erro: error.message });
+  }
+
+  res.json(data.map(mapearCompraFornecedor));
+});
+
+app.post('/compras-fornecedores', async (req, res) => {
+  const fornecedorId = Number(req.body.fornecedorId || 0);
+  const produtoId = Number(req.body.produtoId || 0);
+  const quantidade = Number(req.body.quantidade || 0);
+  const valorTotal = Number(req.body.valorTotal || 0);
+  const valorPago = Math.min(Number(req.body.valorPago || 0), valorTotal);
+  const saldoRestante = Math.max(valorTotal - valorPago, 0);
+  const status = saldoRestante === 0 ? 'Pago' : (valorPago > 0 ? 'Parcial' : 'Pendente');
+  const atualizarEstoque = Boolean(req.body.atualizarEstoque);
+  const lancarCaixa = Boolean(req.body.lancarCaixa) && valorPago > 0;
+  const dataCompra = req.body.data || new Date().toISOString();
+  const syncId = req.body.syncId || `compra-${Date.now()}`;
+  const caixaSyncId = lancarCaixa ? `caixa-${syncId}` : null;
+
+  if (!fornecedorId || !produtoId || !quantidade || quantidade <= 0 || !valorTotal || valorTotal <= 0) {
+    return res.status(400).json({ erro: 'Dados da compra invalidos' });
+  }
+
+  const { data: fornecedor, error: erroFornecedor } = await supabase
+    .from('fornecedores')
+    .select('*')
+    .eq('id', fornecedorId)
+    .single();
+
+  if (erroFornecedor || !fornecedor) {
+    return res.status(404).json({ erro: 'Fornecedor nao encontrado' });
+  }
+
+  const { data: produto, error: erroProduto } = await supabase
+    .from('produtos')
+    .select('*')
+    .eq('id', produtoId)
+    .single();
+
+  if (erroProduto || !produto) {
+    return res.status(404).json({ erro: 'Produto nao encontrado' });
+  }
+
+  const compraId = Date.now();
+  const { data: compraCriada, error: erroCriarCompra } = await supabase
+    .from('compras_fornecedores')
+    .insert([{
+      id: compraId,
+      sync_id: syncId,
+      fornecedor_id: fornecedorId,
+      fornecedor_nome: fornecedor.nome,
+      produto_id: produtoId,
+      produto_nome: produto.nome,
+      quantidade,
+      valor_total: valorTotal,
+      valor_pago: valorPago,
+      saldo_restante: saldoRestante,
+      status,
+      forma_pagamento: req.body.formaPagamento || 'Nao informado',
+      data_compra: dataCompra,
+      vencimento: req.body.vencimento || null,
+      observacao: req.body.observacao || '',
+      atualizou_estoque: false,
+      lancou_caixa: false,
+      caixa_sync_id: null,
+      ativo: true
+    }])
+    .select()
+    .single();
+
+  if (erroCriarCompra) {
+    return res.status(500).json({ erro: erroCriarCompra.message });
+  }
+
+  let estoqueAplicado = false;
+  let caixaAplicado = false;
+
+  if (atualizarEstoque) {
+    const { error: erroEstoque } = await supabase
+      .from('produtos')
+      .update({ quantidade: Number(produto.quantidade || 0) + quantidade })
+      .eq('id', produtoId);
+
+    if (erroEstoque) {
+      return res.status(500).json({ erro: erroEstoque.message });
+    }
+
+    estoqueAplicado = true;
+  }
+
+  if (lancarCaixa) {
+    await registrarSaidaCaixaAutomatica({
+      syncId: caixaSyncId,
+      categoria: 'Mercadoria',
+      descricao: `Compra fornecedor - ${fornecedor.nome} - ${produto.nome} - ${req.body.formaPagamento || 'Nao informado'}`,
+      valor: valorPago,
+      dataMovimento: dataCompra
+    });
+
+    caixaAplicado = true;
+  }
+
+  const { data, error } = await supabase
+    .from('compras_fornecedores')
+    .update({
+      atualizou_estoque: estoqueAplicado,
+      lancou_caixa: caixaAplicado,
+      caixa_sync_id: caixaAplicado ? caixaSyncId : null
+    })
+    .eq('id', compraCriada.id)
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(500).json({ erro: error.message });
+  }
+
+  res.status(201).json(mapearCompraFornecedor(data));
+});
+
+app.post('/compras-fornecedores/:id/pagar', async (req, res) => {
+  const id = Number(req.params.id);
+  const valorPagoAgora = Number(req.body.valorPago || 0);
+  const formaPagamento = req.body.formaPagamento || 'Nao informado';
+
+  if (!valorPagoAgora || valorPagoAgora <= 0) {
+    return res.status(400).json({ erro: 'Valor invalido' });
+  }
+
+  const { data: compra, error: erroBusca } = await supabase
+    .from('compras_fornecedores')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (erroBusca || !compra) {
+    return res.status(404).json({ erro: 'Compra nao encontrada' });
+  }
+
+  const valorTotal = Number(compra.valor_total || 0);
+  const novoValorPago = Math.min(Number(compra.valor_pago || 0) + valorPagoAgora, valorTotal);
+  const novoSaldo = Math.max(valorTotal - novoValorPago, 0);
+  const novoStatus = novoSaldo === 0 ? 'Pago' : 'Parcial';
+  const syncId = req.body.syncId || `pagamento-compra-${id}-${Date.now()}`;
+
+  await registrarSaidaCaixaAutomatica({
+    syncId,
+    categoria: 'Mercadoria',
+    descricao: `Pagamento fornecedor - ${compra.fornecedor_nome} - ${compra.produto_nome} - ${formaPagamento}`,
+    valor: valorPagoAgora,
+    dataMovimento: new Date().toISOString()
+  });
+
+  const { data, error } = await supabase
+    .from('compras_fornecedores')
+    .update({
+      valor_pago: novoValorPago,
+      saldo_restante: novoSaldo,
+      status: novoStatus,
+      forma_pagamento: formaPagamento
+    })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) {
+    return res.status(500).json({ erro: error.message });
+  }
+
+  res.json(mapearCompraFornecedor(data));
+});
+
+app.delete('/compras-fornecedores/:id', async (req, res) => {
+  const id = Number(req.params.id);
+  const reverterEstoque = req.query.reverterEstoque === 'true';
+  const reverterCaixa = req.query.reverterCaixa === 'true';
+
+  const { data: compra, error: erroBusca } = await supabase
+    .from('compras_fornecedores')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (erroBusca || !compra) {
+    return res.status(404).json({ erro: 'Compra nao encontrada' });
+  }
+
+  if (reverterEstoque && compra.atualizou_estoque) {
+    const { data: produto } = await supabase
+      .from('produtos')
+      .select('*')
+      .eq('id', compra.produto_id)
+      .single();
+
+    if (produto) {
+      await supabase
+        .from('produtos')
+        .update({ quantidade: Math.max(Number(produto.quantidade || 0) - Number(compra.quantidade || 0), 0) })
+        .eq('id', compra.produto_id);
+    }
+  }
+
+  if (reverterCaixa && compra.caixa_sync_id) {
+    await supabase
+      .from('caixa')
+      .delete()
+      .eq('sync_id', compra.caixa_sync_id);
+  }
+
+  const { error } = await supabase
+    .from('compras_fornecedores')
+    .update({ ativo: false, status: 'Cancelada' })
+    .eq('id', id);
+
+  if (error) {
+    return res.status(500).json({ erro: error.message });
+  }
+
+  res.json({ mensagem: 'Compra excluida com sucesso' });
+});
+
 // CAIXA
 
 app.get('/caixa', async (req, res) => {
@@ -1382,6 +1746,8 @@ app.get('/backup', async (req, res) => {
   const { data: categorias, error: erroCategorias } = await supabase.from('categorias').select('*');
   const { data: empresa, error: erroEmpresa } = await supabase.from('empresa').select('*');
   const { data: caixa, error: erroCaixa } = await supabase.from('caixa').select('*');
+  const { data: fornecedores, error: erroFornecedores } = await supabase.from('fornecedores').select('*');
+  const { data: comprasFornecedores, error: erroComprasFornecedores } = await supabase.from('compras_fornecedores').select('*');
 
   if (erroProdutos || erroClientes || erroVendas || erroPagamentos || erroCategorias || erroEmpresa || erroCaixa) {
     return res.status(500).json({ erro: 'Erro ao gerar backup' });
@@ -1395,12 +1761,14 @@ app.get('/backup', async (req, res) => {
     categorias,
     empresa,
     caixa,
+    fornecedores: erroFornecedores ? [] : fornecedores,
+    comprasFornecedores: erroComprasFornecedores ? [] : comprasFornecedores,
     geradoEm: new Date().toISOString()
   });
 });
 
 app.get('/exportar-json/:tabela', async (req, res) => {
-  const tabelasPermitidas = ['produtos', 'clientes', 'vendas', 'pagamentos', 'caixa', 'categorias', 'empresa'];
+  const tabelasPermitidas = ['produtos', 'clientes', 'vendas', 'pagamentos', 'caixa', 'categorias', 'empresa', 'fornecedores', 'compras_fornecedores'];
   const tabela = req.params.tabela;
 
   if (!tabelasPermitidas.includes(tabela)) {

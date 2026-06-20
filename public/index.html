@@ -431,6 +431,7 @@
       <option value="Parcial">Parcial</option>
     </select>
     <input id="compraValorPago" type="number" step="0.01" placeholder="Valor pago agora">
+    <input id="compraVencimento" type="date" title="Vencimento">
     <input id="compraObs" placeholder="Observacao da compra">
     <label><input id="compraAtualizarEstoque" type="checkbox" checked> Atualizar estoque</label>
     <label><input id="compraLancarCaixa" type="checkbox" checked> Lancar pagamento no caixa</label>
@@ -442,6 +443,7 @@
     <div class="dash-mini">Compras<strong id="totalComprasFornecedor">0</strong></div>
     <div class="dash-mini">Total comprado<strong id="valorComprasFornecedor">R$ 0,00</strong></div>
     <div class="dash-mini">Pendente<strong id="valorPendenteFornecedor">R$ 0,00</strong></div>
+    <div class="dash-mini">Atrasado<strong id="valorAtrasadoFornecedor">R$ 0,00</strong></div>
   </div>
 
   <div class="card">
@@ -459,7 +461,7 @@
     <input id="buscaCompraFornecedor" placeholder="Buscar fornecedor ou produto..." oninput="carregarFornecedores()">
     <table>
       <thead>
-        <tr><th>Data</th><th>Fornecedor</th><th>Produto</th><th>Qtd</th><th>Total</th><th>Pago</th><th>Status</th><th>Forma</th><th>Acoes</th></tr>
+        <tr><th>Data</th><th>Fornecedor</th><th>Produto</th><th>Qtd</th><th>Total</th><th>Pago</th><th>Saldo</th><th>Status</th><th>Vencimento</th><th>Forma</th><th>Acoes</th></tr>
       </thead>
       <tbody id="listaComprasFornecedor"></tbody>
     </table>
@@ -1727,12 +1729,59 @@ async function editarProduto(id){
   });
 }
 
-function carregarFornecedores(){
-  const fornecedores = carregarCacheLocal('fornecedoresCache') || [];
-  const compras = carregarCacheLocal('comprasFornecedoresCache') || [];
+function statusCompraFornecedor(compra){
+  const saldo = Number(compra.saldoRestante || Math.max(Number(compra.valorTotal || 0) - Number(compra.valorPago || 0), 0));
+
+  if(saldo <= 0){
+    return '<span class="ok">Pago</span>';
+  }
+
+  if(compra.vencimento){
+    const hoje = new Date();
+    const vencimento = new Date(compra.vencimento + 'T00:00:00');
+    hoje.setHours(0,0,0,0);
+
+    if(vencimento < hoje){
+      return '<span class="vencido">Atrasado</span>';
+    }
+  }
+
+  return compra.status === 'Parcial'
+    ? '<span class="alerta">Parcial</span>'
+    : '<span class="vencendo">Pendente</span>';
+}
+
+function erroPermiteFallbackLocal(erro){
+  const mensagem = String(erro && erro.message ? erro.message : erro || '');
+  return erro instanceof TypeError
+    || /fornecedores|compras_fornecedores|schema cache|relation|Failed to fetch/i.test(mensagem);
+}
+
+async function carregarFornecedores(){
+  let fornecedores = carregarCacheLocal('fornecedoresCache') || [];
+  let compras = carregarCacheLocal('comprasFornecedoresCache') || [];
   const produtos = carregarCacheLocal('produtosCache') || [];
   const busca = document.getElementById('buscaCompraFornecedor');
   const termo = busca ? busca.value.trim().toLowerCase() : '';
+
+  try{
+    const [respostaFornecedores, respostaCompras] = await Promise.all([
+      fetch('/fornecedores'),
+      fetch('/compras-fornecedores')
+    ]);
+
+    if(!respostaFornecedores.ok || !respostaCompras.ok){
+      throw new Error('Fornecedores ainda sem tabela no banco');
+    }
+
+    fornecedores = await respostaFornecedores.json();
+    compras = await respostaCompras.json();
+
+    salvarCacheLocal('fornecedoresCache', fornecedores);
+    salvarCacheLocal('comprasFornecedoresCache', compras);
+  }catch(erro){
+    console.log('Fornecedores carregados do cache local.', erro);
+  }
 
   const selectFornecedor = document.getElementById('compraFornecedor');
   if(selectFornecedor){
@@ -1773,23 +1822,41 @@ function carregarFornecedores(){
         <td>${compra.quantidade}</td>
         <td>${dinheiro(compra.valorTotal)}</td>
         <td>${dinheiro(compra.valorPago)}</td>
-        <td>${compra.status}</td>
+        <td>${dinheiro(compra.saldoRestante || Math.max(Number(compra.valorTotal || 0) - Number(compra.valorPago || 0), 0))}</td>
+        <td>${statusCompraFornecedor(compra)}</td>
+        <td>${compra.vencimento ? new Date(compra.vencimento + 'T12:00:00').toLocaleDateString('pt-BR') : '-'}</td>
         <td>${compra.formaPagamento}</td>
-        <td><button onclick="excluirCompraFornecedor(${compra.id})">Excluir</button></td>
+        <td>
+          ${Number(compra.saldoRestante || 0) > 0 ? `<button onclick="pagarCompraFornecedor(${compra.id})">Pagar</button>` : ''}
+          <button onclick="excluirCompraFornecedor(${compra.id})">Excluir</button>
+        </td>
       </tr>
-    `).join('') || '<tr><td colspan="9">Nenhuma compra registrada.</td></tr>';
+    `).join('') || '<tr><td colspan="11">Nenhuma compra registrada.</td></tr>';
   }
 
   const totalComprado = compras.reduce((soma, compra) => soma + Number(compra.valorTotal || 0), 0);
   const totalPago = compras.reduce((soma, compra) => soma + Number(compra.valorPago || 0), 0);
+  const hoje = new Date();
+  hoje.setHours(0,0,0,0);
+  const totalAtrasado = compras.reduce((soma, compra) => {
+    const saldo = Number(compra.saldoRestante || Math.max(Number(compra.valorTotal || 0) - Number(compra.valorPago || 0), 0));
+
+    if(saldo <= 0 || !compra.vencimento){
+      return soma;
+    }
+
+    const vencimento = new Date(compra.vencimento + 'T00:00:00');
+    return vencimento < hoje ? soma + saldo : soma;
+  }, 0);
 
   preencherTexto('totalFornecedores', fornecedores.length);
   preencherTexto('totalComprasFornecedor', compras.length);
   preencherTexto('valorComprasFornecedor', dinheiro(totalComprado));
   preencherTexto('valorPendenteFornecedor', dinheiro(Math.max(totalComprado - totalPago, 0)));
+  preencherTexto('valorAtrasadoFornecedor', dinheiro(totalAtrasado));
 }
 
-function salvarFornecedor(){
+async function salvarFornecedor(){
   const nome = document.getElementById('fornecedorNome').value.trim();
 
   if(!nome){
@@ -1797,23 +1864,36 @@ function salvarFornecedor(){
     return;
   }
 
-  const fornecedores = carregarCacheLocal('fornecedoresCache') || [];
-  fornecedores.unshift({
+  const fornecedor = {
     id:Date.now(),
     nome,
     contato:document.getElementById('fornecedorContato').value.trim(),
     observacoes:document.getElementById('fornecedorObs').value.trim(),
     criadoEm:new Date().toISOString()
-  });
+  };
 
-  salvarCacheLocal('fornecedoresCache', fornecedores);
+  try{
+    const resposta = await fetch('/fornecedores',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(fornecedor)
+    });
+    const dados = await resposta.json();
+    if(dados.erro){ throw new Error(dados.erro); }
+  }catch(erro){
+    const fornecedores = carregarCacheLocal('fornecedoresCache') || [];
+    fornecedores.unshift(fornecedor);
+    salvarCacheLocal('fornecedoresCache', fornecedores);
+    alert('Fornecedor salvo localmente. Quando a tabela estiver criada no banco, ele podera ser salvo online.');
+  }
+
   document.getElementById('fornecedorNome').value = '';
   document.getElementById('fornecedorContato').value = '';
   document.getElementById('fornecedorObs').value = '';
-  carregarFornecedores();
+  await carregarFornecedores();
 }
 
-function excluirFornecedor(id){
+async function excluirFornecedor(id){
   const compras = carregarCacheLocal('comprasFornecedoresCache') || [];
 
   if(compras.some(compra => Number(compra.fornecedorId) === Number(id))){
@@ -1825,9 +1905,16 @@ function excluirFornecedor(id){
     return;
   }
 
-  const fornecedores = carregarCacheLocal('fornecedoresCache') || [];
-  salvarCacheLocal('fornecedoresCache', fornecedores.filter(f => Number(f.id) !== Number(id)));
-  carregarFornecedores();
+  try{
+    const resposta = await fetch(`/fornecedores/${id}`,{method:'DELETE'});
+    const dados = await resposta.json();
+    if(dados.erro){ throw new Error(dados.erro); }
+  }catch(erro){
+    const fornecedores = carregarCacheLocal('fornecedoresCache') || [];
+    salvarCacheLocal('fornecedoresCache', fornecedores.filter(f => Number(f.id) !== Number(id)));
+  }
+
+  await carregarFornecedores();
 }
 
 async function registrarCompraFornecedor(){
@@ -1839,6 +1926,7 @@ async function registrarCompraFornecedor(){
   const formaPagamento = document.getElementById('compraFormaPagamento').value;
   const valorPagoInput = numeroDigitado(document.getElementById('compraValorPago').value);
   const dataInput = document.getElementById('compraData').value;
+  const vencimentoInput = document.getElementById('compraVencimento').value;
   const atualizarEstoque = document.getElementById('compraAtualizarEstoque').checked;
   const lancarCaixa = document.getElementById('compraLancarCaixa').checked;
   const fornecedores = carregarCacheLocal('fornecedoresCache') || [];
@@ -1851,63 +1939,202 @@ async function registrarCompraFornecedor(){
     return;
   }
 
-  const valorPago = status === 'Pendente' ? 0 : (valorPagoInput > 0 ? valorPagoInput : valorTotal);
+  const valorPago = status === 'Pendente' ? 0 : Math.min((valorPagoInput > 0 ? valorPagoInput : valorTotal), valorTotal);
+  const saldoRestante = Math.max(valorTotal - valorPago, 0);
+  const statusFinal = saldoRestante === 0 ? 'Pago' : (valorPago > 0 ? 'Parcial' : 'Pendente');
   const dataCompra = dataInput ? new Date(dataInput + 'T12:00:00') : new Date();
   const estoqueAntes = Number(produto.quantidade || 0);
+  const syncId = gerarSyncId('compra');
   const compra = {
     id:Date.now(), fornecedorId, fornecedorNome:fornecedor.nome, produtoId, produtoNome:produto.nome,
-    quantidade, valorTotal, valorPago, status, formaPagamento, data:dataCompra.toISOString(),
+    quantidade, valorTotal, valorPago, saldoRestante, status:statusFinal, formaPagamento, data:dataCompra.toISOString(),
+    vencimento:vencimentoInput || null,
     observacao:document.getElementById('compraObs').value.trim(), atualizouEstoque:atualizarEstoque,
-    lancouCaixa:lancarCaixa && valorPago > 0
+    lancouCaixa:lancarCaixa && valorPago > 0, syncId
   };
 
-  if(atualizarEstoque){
-    try{
-      const resposta = await fetch(`/produtos/${produtoId}/entrada`,{
-        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({quantidade})
-      });
-      const dados = await resposta.json();
-      if(dados.erro){ alert(dados.erro); return; }
+  try{
+    const resposta = await fetch('/compras-fornecedores',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        ...compra,
+        atualizarEstoque,
+        lancarCaixa,
+        data:dataCompra.toISOString()
+      })
+    });
+    const dados = await resposta.json();
+    if(dados.erro){ throw new Error(dados.erro); }
+
+    if(atualizarEstoque){
       registrarHistoricoEstoqueLocal({
         produtoId, produtoNome:produto.nome, tipo:'Entrada', quantidade,
         estoqueAntes, estoqueDepois:estoqueAntes + quantidade,
         origem:`Compra fornecedor - ${fornecedor.nome}`, valor:valorTotal
       });
-    }catch{
-      alert('Nao foi possivel atualizar o estoque agora.');
+    }
+  }catch(erro){
+    if(!erroPermiteFallbackLocal(erro)){
+      alert('Nao foi possivel registrar a compra: ' + (erro.message || erro));
       return;
     }
+
+    console.log('Compra salva localmente.', erro);
+
+    if(atualizarEstoque){
+      try{
+        const resposta = await fetch(`/produtos/${produtoId}/entrada`,{
+          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({quantidade})
+        });
+        const dados = await resposta.json();
+        if(dados.erro){ alert(dados.erro); return; }
+        registrarHistoricoEstoqueLocal({
+          produtoId, produtoNome:produto.nome, tipo:'Entrada', quantidade,
+          estoqueAntes, estoqueDepois:estoqueAntes + quantidade,
+          origem:`Compra fornecedor - ${fornecedor.nome}`, valor:valorTotal
+        });
+      }catch{
+        alert('Nao foi possivel atualizar o estoque agora.');
+        return;
+      }
+    }
+
+    if(lancarCaixa && valorPago > 0){
+      await fetch('/caixa',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          syncId:`caixa-${syncId}`, tipo:'SAIDA', categoria:'Mercadoria',
+          descricao:`Compra fornecedor - ${fornecedor.nome} - ${produto.nome} - ${formaPagamento}`,
+          valor:valorPago, dataMovimento:dataCompra.toISOString()
+        })
+      });
+    }
+
+    const compras = carregarCacheLocal('comprasFornecedoresCache') || [];
+    compras.unshift(compra);
+    salvarCacheLocal('comprasFornecedoresCache', compras);
   }
 
-  if(lancarCaixa && valorPago > 0){
-    await fetch('/caixa',{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        syncId:gerarSyncId('compra'), tipo:'SAIDA', categoria:'Mercadoria',
-        descricao:`Compra fornecedor - ${fornecedor.nome} - ${produto.nome} - ${formaPagamento}`,
-        valor:valorPago, dataMovimento:dataCompra.toISOString()
-      })
-    });
-  }
-
-  const compras = carregarCacheLocal('comprasFornecedoresCache') || [];
-  compras.unshift(compra);
-  salvarCacheLocal('comprasFornecedoresCache', compras);
-  ['compraQuantidade','compraValorTotal','compraValorPago','compraObs'].forEach(id => document.getElementById(id).value = '');
+  ['compraQuantidade','compraValorTotal','compraValorPago','compraObs','compraVencimento'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('compraData').value = '';
   await carregarProdutos();
   await carregarCaixa();
-  carregarFornecedores();
+  await carregarFornecedores();
 }
 
-function excluirCompraFornecedor(id){
-  if(!confirm('Excluir registro da compra? Isso nao desfaz automaticamente estoque ou caixa ja lancados.')){
+async function pagarCompraFornecedor(id){
+  const compras = carregarCacheLocal('comprasFornecedoresCache') || [];
+  const compra = compras.find(item => Number(item.id) === Number(id));
+  const saldo = Number(compra ? compra.saldoRestante || Math.max(Number(compra.valorTotal || 0) - Number(compra.valorPago || 0), 0) : 0);
+
+  if(!compra || saldo <= 0){
+    alert('Compra sem saldo pendente.');
     return;
   }
-  const compras = carregarCacheLocal('comprasFornecedoresCache') || [];
-  salvarCacheLocal('comprasFornecedoresCache', compras.filter(compra => Number(compra.id) !== Number(id)));
-  carregarFornecedores();
+
+  abrirModalAcao({
+    titulo:'Pagar fornecedor',
+    texto:`${compra.fornecedorNome} - saldo: ${dinheiro(saldo)}`,
+    confirmarTexto:'Registrar Pagamento',
+    campos:[
+      {id:'modalValorPagamentoCompra', rotulo:'Valor pago', tipo:'number', step:'0.01', min:'0', valor:saldo},
+      {
+        id:'modalFormaPagamentoCompra',
+        rotulo:'Forma de pagamento',
+        tipo:'select',
+        opcoes:[
+          {valor:'Pix', texto:'Pix'},
+          {valor:'Dinheiro', texto:'Dinheiro'},
+          {valor:'Cartao', texto:'Cartao'},
+          {valor:'Boleto', texto:'Boleto'},
+          {valor:'Misto', texto:'Misto'}
+        ]
+      }
+    ],
+    aoConfirmar: async function(){
+      const valorPago = numeroDigitado(valorModal('modalValorPagamentoCompra'));
+      const formaPagamento = valorModal('modalFormaPagamentoCompra') || 'Nao informado';
+
+      if(!valorPago || valorPago <= 0){
+        alert('Informe um valor valido.');
+        return;
+      }
+
+      try{
+        const resposta = await fetch(`/compras-fornecedores/${id}/pagar`,{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            valorPago,
+            formaPagamento,
+            syncId:gerarSyncId('pagamento-compra')
+          })
+        });
+        const dados = await resposta.json();
+        if(dados.erro){ throw new Error(dados.erro); }
+      }catch(erro){
+        if(!erroPermiteFallbackLocal(erro)){
+          alert('Nao foi possivel registrar o pagamento: ' + (erro.message || erro));
+          return;
+        }
+
+        compra.valorPago = Math.min(Number(compra.valorPago || 0) + valorPago, Number(compra.valorTotal || 0));
+        compra.saldoRestante = Math.max(Number(compra.valorTotal || 0) - compra.valorPago, 0);
+        compra.status = compra.saldoRestante === 0 ? 'Pago' : 'Parcial';
+        compra.formaPagamento = formaPagamento;
+        salvarCacheLocal('comprasFornecedoresCache', compras);
+
+        await fetch('/caixa',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            syncId:gerarSyncId('pagamento-compra'),
+            tipo:'SAIDA',
+            categoria:'Mercadoria',
+            descricao:`Pagamento fornecedor - ${compra.fornecedorNome} - ${compra.produtoNome} - ${formaPagamento}`,
+            valor:valorPago,
+            dataMovimento:new Date().toISOString()
+          })
+        });
+      }
+
+      fecharModalAcao();
+      await carregarCaixa();
+      await carregarFornecedores();
+    }
+  });
 }
+
+async function excluirCompraFornecedor(id){
+  const compras = carregarCacheLocal('comprasFornecedoresCache') || [];
+  const compra = compras.find(item => Number(item.id) === Number(id));
+  const reverterEstoque = compra && compra.atualizouEstoque
+    ? confirm('Deseja retirar do estoque a quantidade desta compra?')
+    : false;
+  const reverterCaixa = compra && compra.lancouCaixa
+    ? confirm('Deseja remover do caixa o pagamento desta compra?')
+    : false;
+
+  if(!confirm('Excluir registro da compra?')){
+    return;
+  }
+
+  try{
+    const resposta = await fetch(`/compras-fornecedores/${id}?reverterEstoque=${reverterEstoque}&reverterCaixa=${reverterCaixa}`,{
+      method:'DELETE'
+    });
+    const dados = await resposta.json();
+    if(dados.erro){ throw new Error(dados.erro); }
+  }catch(erro){
+    salvarCacheLocal('comprasFornecedoresCache', compras.filter(compra => Number(compra.id) !== Number(id)));
+  }
+
+  await carregarProdutos();
+  await carregarCaixa();
+  await carregarFornecedores();
+}
+
 async function carregarPagamentosVenda(idVenda){
   try{
     const resposta = await fetch(`/pagamentos-venda/${idVenda}`);
