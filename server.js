@@ -868,7 +868,8 @@ app.post('/vendas', async (req, res) => {
     dataPagamento: data.data_pagamento,
     dataVencimento: data.data_vencimento,
     valorPago: Number(data.valor_pago || 0),
-    saldoRestante: Number(data.saldo_restante || 0)
+    saldoRestante: Number(data.saldo_restante || 0),
+    formaPagamento
   });
 });
 
@@ -1452,6 +1453,128 @@ app.post('/restaurar-backup', async (req, res) => {
   }
 
   res.json({ mensagem: 'Backup restaurado com sucesso' });
+});
+
+// MODO TESTE
+
+app.post('/modo-teste/criar', async (req, res) => {
+  const clienteTeste = {
+    id: Date.now(),
+    nome: 'Cliente Teste',
+    telefone: '',
+    endereco: 'Cadastro para testes',
+    observacoes: 'Pode excluir vendas e movimentacoes deste cliente sem afetar dados reais',
+    criado_em: new Date().toISOString()
+  };
+
+  const produtosTeste = [
+    {
+      id: Date.now() + 1,
+      nome: 'Produto Teste Pix',
+      categoria: 'Teste',
+      custo: 2,
+      preco_venda: 5,
+      quantidade: 20,
+      validade: null,
+      ativo: true
+    },
+    {
+      id: Date.now() + 2,
+      nome: 'Produto Teste Fiado',
+      categoria: 'Teste',
+      custo: 3,
+      preco_venda: 7,
+      quantidade: 20,
+      validade: null,
+      ativo: true
+    }
+  ];
+
+  await supabase
+    .from('clientes')
+    .delete()
+    .eq('nome', 'Cliente Teste');
+
+  await supabase
+    .from('produtos')
+    .delete()
+    .in('nome', produtosTeste.map(produto => produto.nome));
+
+  const { error: erroCliente } = await supabase
+    .from('clientes')
+    .insert([clienteTeste]);
+
+  if (erroCliente) {
+    return res.status(500).json({ erro: erroCliente.message });
+  }
+
+  const { error: erroProdutos } = await supabase
+    .from('produtos')
+    .insert(produtosTeste);
+
+  if (erroProdutos) {
+    return res.status(500).json({ erro: erroProdutos.message });
+  }
+
+  res.json({ mensagem: 'Cliente e produtos de teste criados com sucesso' });
+});
+
+app.delete('/modo-teste/limpar', async (req, res) => {
+  const { data: vendasTeste } = await supabase
+    .from('vendas')
+    .select('id,sync_id')
+    .or('cliente_nome.eq.Cliente Teste,produto_nome.ilike.Produto Teste%');
+
+  const idsVendas = (vendasTeste || []).map(venda => venda.id);
+  const syncIdsCaixa = [];
+
+  (vendasTeste || []).forEach(venda => {
+    syncIdsCaixa.push(venda.sync_id ? `caixa-venda-${venda.sync_id}` : `caixa-venda-${venda.id}`);
+  });
+
+  const { data: pagamentosTeste } = idsVendas.length > 0
+    ? await supabase.from('pagamentos').select('sync_id').in('venda_id', idsVendas)
+    : { data: [] };
+
+  (pagamentosTeste || [])
+    .filter(pagamento => pagamento.sync_id)
+    .forEach(pagamento => syncIdsCaixa.push(`caixa-pagamento-${pagamento.sync_id}`));
+
+  if (syncIdsCaixa.length > 0) {
+    await supabase
+      .from('caixa')
+      .delete()
+      .in('sync_id', syncIdsCaixa);
+  }
+
+  await supabase
+    .from('caixa')
+    .delete()
+    .or('descricao.ilike.%Cliente Teste%,descricao.ilike.%Produto Teste%');
+
+  if (idsVendas.length > 0) {
+    await supabase
+      .from('pagamentos')
+      .delete()
+      .in('venda_id', idsVendas);
+
+    await supabase
+      .from('vendas')
+      .delete()
+      .in('id', idsVendas);
+  }
+
+  await supabase
+    .from('produtos')
+    .delete()
+    .ilike('nome', 'Produto Teste%');
+
+  await supabase
+    .from('clientes')
+    .delete()
+    .eq('nome', 'Cliente Teste');
+
+  res.json({ mensagem: 'Dados de teste removidos com sucesso' });
 });
 
 // EXCEL

@@ -124,6 +124,29 @@
     </div>
   </div>
 
+  <div class="card">
+    <h2>Formas de Pagamento Hoje</h2>
+    <div class="dashboard-secundario">
+      <div class="dash-mini">Dinheiro<strong id="formaHojeDinheiro">R$ 0,00</strong></div>
+      <div class="dash-mini">Pix<strong id="formaHojePix">R$ 0,00</strong></div>
+      <div class="dash-mini">Cartao<strong id="formaHojeCartao">R$ 0,00</strong></div>
+      <div class="dash-mini">Misto<strong id="formaHojeMisto">R$ 0,00</strong></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Fechamento do Dia</h2>
+    <div class="dashboard-secundario">
+      <div class="dash-mini">Entradas<strong id="fechamentoEntradas">R$ 0,00</strong></div>
+      <div class="dash-mini">Saidas<strong id="fechamentoSaidas">R$ 0,00</strong></div>
+      <div class="dash-mini">Saldo<strong id="fechamentoSaldo">R$ 0,00</strong></div>
+      <div class="dash-mini">Vendas<strong id="fechamentoVendas">0</strong></div>
+      <div class="dash-mini">Lucro<strong id="fechamentoLucro">R$ 0,00</strong></div>
+      <div class="dash-mini">Perdas<strong id="fechamentoPerdas">R$ 0,00</strong></div>
+    </div>
+    <div id="fechamentoFormas" class="vendas-filtros-info">Formas de pagamento do dia: -</div>
+    <textarea id="fechamentoObservacao" placeholder="Observacoes do fechamento do dia"></textarea>
+    <button onclick="imprimirFechamentoDia()">Imprimir fechamento</button>
+  </div>
   <div class="dashboard-alertas">
     <div class="alert-card">
       <span>⚠️ Estoque baixo</span>
@@ -429,6 +452,15 @@
         <option value="ENTRADA">Entradas</option>
         <option value="SAIDA">Saídas</option>
       </select>
+      <select id="filtroCaixaForma" onchange="aplicarFiltrosCaixa()">
+        <option value="todos">Todas formas</option>
+        <option value="Dinheiro">Dinheiro</option>
+        <option value="Pix">Pix</option>
+        <option value="Cartao">Cartao</option>
+        <option value="Misto">Misto</option>
+        <option value="Fiado">Fiado</option>
+        <option value="Nao informado">Nao informado</option>
+      </select>
       <select id="filtroCaixaCategoria" onchange="aplicarFiltrosCaixa()">
         <option value="todos">Todas categorias</option>
       </select>
@@ -460,11 +492,18 @@
     <h2>Relatório por Período</h2>
     <input id="dataInicial" type="date">
     <input id="dataFinal" type="date">
-    <button onclick="gerarRelatorioPeriodo()">Gerar Relatório</button>
+    <button onclick="definirPeriodoRelatorio('hoje')">Hoje</button>
+    <button onclick="definirPeriodoRelatorio('ontem')">Ontem</button>
+    <button onclick="definirPeriodoRelatorio('7dias')">Ultimos 7 dias</button>
+    <button onclick="definirPeriodoRelatorio('mes')">Mes atual</button>
+    <button onclick="definirPeriodoRelatorio('mesAnterior')">Mes anterior</button>
+    <button onclick="gerarRelatorioPeriodo()">Gerar Relatorio</button>
     <table>
       <tr><td><strong>Vendas no período</strong></td><td id="periodoVendas">0</td></tr>
       <tr><td><strong>Faturamento no período</strong></td><td id="periodoFaturamento">R$ 0,00</td></tr>
-      <tr><td><strong>Lucro no período</strong></td><td id="periodoLucro">R$ 0,00</td></tr>
+      <tr><td><strong>Lucro no periodo</strong></td><td id="periodoLucro">R$ 0,00</td></tr>
+      <tr><td><strong>Fiado no periodo</strong></td><td id="periodoFiado">R$ 0,00</td></tr>
+      <tr><td><strong>Perdas no periodo</strong></td><td id="periodoPerdas">R$ 0,00</td></tr>
     </table>
   </div>
 
@@ -561,6 +600,13 @@ Adicionar Categoria
 
     <hr>
 
+    <h3>Modo Teste</h3>
+    <button onclick="criarModoTeste()">Criar cliente/produtos teste</button>
+    <button onclick="limparModoTeste()">Limpar dados teste</button>
+    <p id="mensagemModoTeste"></p>
+
+    <hr>
+
     <h3>Exportacoes JSON</h3>
     <button onclick="exportarJson('produtos')">Produtos JSON</button>
     <button onclick="exportarJson('clientes')">Clientes JSON</button>
@@ -601,6 +647,7 @@ let filtroVendaPeriodoAtual = 'todos';
 let vendasCacheTela = [];
 let filtroCaixaPeriodoAtual = 'todos';
 let caixaCacheTela = [];
+let fichaClienteAtual = null;
 
 function aplicarTemaSalvo(){
   const tema = localStorage.getItem('temaSistema') || 'claro';
@@ -830,6 +877,36 @@ function preencherTexto(id, valor){
   }
 }
 
+function mesmaData(data, referencia){
+  const d = new Date(data);
+  return d.getFullYear() === referencia.getFullYear()
+    && d.getMonth() === referencia.getMonth()
+    && d.getDate() === referencia.getDate();
+}
+
+function intervaloDatas(inicio, fim){
+  const dataInicio = new Date(inicio + 'T00:00:00');
+  const dataFim = new Date(fim + 'T23:59:59');
+
+  return {
+    inicio:dataInicio,
+    fim:dataFim
+  };
+}
+
+function dataInputLocal(data){
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2,'0');
+  const dia = String(data.getDate()).padStart(2,'0');
+  return `${ano}-${mes}-${dia}`;
+}
+
+function resumirFormasPagamento(movimentacoes){
+  const resumo = resumirFormasPagamento(movimentacoes);
+
+  return resumo;
+}
+
 function statusValidade(dataValidade){
   if(!dataValidade) return '<span class="ok">Sem validade</span>';
 
@@ -843,6 +920,18 @@ function statusValidade(dataValidade){
   if(dias <= 7) return `<span class="perto">Vence em ${dias} dia(s)</span>`;
 
   return '<span class="ok">Dentro da validade</span>';
+}
+
+function produtoEstaVencido(produto){
+  if(!produto || !produto.validade){
+    return false;
+  }
+
+  const hoje = new Date();
+  const validade = new Date(produto.validade + 'T00:00:00');
+  hoje.setHours(0,0,0,0);
+
+  return validade < hoje;
 }
 
 async function carregar(){
@@ -1589,6 +1678,7 @@ async function verFichaCliente(id){
 
   const cliente = dados.cliente;
   const vendas = dados.vendas || [];
+  fichaClienteAtual = dados;
 
   const ultimaCompra = dados.ultimaCompra
     ? new Date(dados.ultimaCompra).toLocaleDateString('pt-BR')
@@ -1751,6 +1841,14 @@ async function verFichaCliente(id){
       ${htmlVendas}
     </div>
 
+    <button onclick="imprimirExtratoClienteAtual()">
+      Imprimir Extrato
+    </button>
+
+    <button onclick="receberTudoClienteAtual()">
+      Receber Tudo em Aberto
+    </button>
+
     <button onclick="document.getElementById('fichaCliente').style.display='none'">
       Fechar Ficha
     </button>
@@ -1759,6 +1857,86 @@ async function verFichaCliente(id){
   ficha.scrollIntoView({
     behavior:'smooth'
   });
+}
+
+function imprimirExtratoClienteAtual(){
+  if(!fichaClienteAtual){
+    alert('Abra a ficha de um cliente primeiro.');
+    return;
+  }
+
+  const cliente = fichaClienteAtual.cliente;
+  const vendas = fichaClienteAtual.vendas || [];
+  const linhas = vendas.map(venda => `
+    <tr>
+      <td>${new Date(venda.data).toLocaleDateString('pt-BR')}</td>
+      <td>${venda.produtoNome}</td>
+      <td>${venda.status}</td>
+      <td>${dinheiro(venda.valorTotal)}</td>
+      <td>${dinheiro(venda.valorPago || 0)}</td>
+      <td>${dinheiro(venda.saldoRestante || 0)}</td>
+    </tr>
+  `).join('');
+
+  const conteudo = `
+    <html>
+    <head>
+      <title>Extrato do Cliente</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:18px;color:#111;}
+        h2{margin-bottom:4px;}
+        table{width:100%;border-collapse:collapse;margin-top:14px;}
+        th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px;}
+      </style>
+    </head>
+    <body>
+      <h2>Extrato do Cliente</h2>
+      <p><strong>Cliente:</strong> ${cliente.nome}</p>
+      <p><strong>Total comprado:</strong> ${dinheiro(fichaClienteAtual.totalComprado)}</p>
+      <p><strong>Total pago:</strong> ${dinheiro(fichaClienteAtual.totalPago)}</p>
+      <p><strong>Em aberto:</strong> ${dinheiro(fichaClienteAtual.totalAberto)}</p>
+      <table>
+        <thead>
+          <tr><th>Data</th><th>Produto</th><th>Status</th><th>Total</th><th>Pago</th><th>Saldo</th></tr>
+        </thead>
+        <tbody>${linhas || '<tr><td colspan="6">Sem compras.</td></tr>'}</tbody>
+      </table>
+      <script>window.onload = function(){window.print();}<\/script>
+    </body>
+    </html>
+  `;
+
+  const janela = window.open('', '_blank');
+  janela.document.write(conteudo);
+  janela.document.close();
+}
+
+async function receberTudoClienteAtual(){
+  if(!fichaClienteAtual){
+    alert('Abra a ficha de um cliente primeiro.');
+    return;
+  }
+
+  const vendasAbertas = (fichaClienteAtual.vendas || [])
+    .filter(venda => venda.status === 'Em aberto' && Number(venda.saldoRestante || 0) > 0);
+
+  if(vendasAbertas.length === 0){
+    alert('Este cliente nao possui saldo em aberto.');
+    return;
+  }
+
+  const total = vendasAbertas.reduce((soma, venda) => soma + Number(venda.saldoRestante || 0), 0);
+  const confirmar = confirm(`Receber todo o saldo deste cliente?\n\nTotal: ${dinheiro(total)}`);
+
+  if(!confirmar){
+    return;
+  }
+
+  for(const venda of vendasAbertas){
+    await processarRecebimentoVenda(venda.id, Number(venda.saldoRestante || 0), 'Nao informado');
+  }
+
+  await verFichaCliente(fichaClienteAtual.cliente.id);
 }
 async function carregarClientes(){
   let clientes = [];
@@ -2142,7 +2320,15 @@ async function excluirCliente(id){
 }
 
 async function excluirVenda(id){
-  if(!confirm('Excluir venda?')){
+  const vendasCache = carregarCacheLocal('vendasCache') || [];
+  const abertasCache = carregarCacheLocal('abertasCache') || [];
+  const venda = vendasCache.find(item => Number(item.id) === Number(id))
+    || abertasCache.find(item => Number(item.id) === Number(id));
+  const textoVenda = venda
+    ? `${venda.clienteNome} - ${venda.produtoNome} - ${dinheiro(venda.valorTotal)}`
+    : `Venda #${id}`;
+
+  if(!confirm(`Excluir esta venda?\n\n${textoVenda}\n\nO estoque e o caixa automatico serao ajustados.`)){
     return;
   }
 
@@ -2155,8 +2341,6 @@ async function excluirVenda(id){
       return;
     }
   }else{
-    const vendasCache = carregarCacheLocal('vendasCache') || [];
-    const abertasCache = carregarCacheLocal('abertasCache') || [];
     const produtosCache = carregarCacheLocal('produtosCache') || [];
     const caixaCache = carregarCacheLocal('caixaCache') || [];
     const vendaRemovida = vendasCache.find(v => Number(v.id) === Number(id))
@@ -2381,13 +2565,15 @@ function gerarRelatorioPeriodo(){
   }
 
   const vendas = carregarCacheLocal('vendasCache') || [];
+  const caixa = carregarCacheLocal('caixaCache') || [];
 
-  const inicio = new Date(dataInicial + 'T00:00:00');
-  const fim = new Date(dataFinal + 'T23:59:59');
+  const { inicio, fim } = intervaloDatas(dataInicial, dataFinal);
 
   let totalVendas = 0;
   let totalFaturamento = 0;
   let totalLucro = 0;
+  let totalFiado = 0;
+  let totalPerdas = 0;
 
   vendas.forEach(venda => {
     const dataVenda = new Date(venda.data);
@@ -2396,12 +2582,60 @@ function gerarRelatorioPeriodo(){
       totalVendas++;
       totalFaturamento += Number(venda.valorTotal || 0);
       totalLucro += Number(venda.lucro || 0);
+
+      if(venda.status === 'Em aberto'){
+        totalFiado += Number(venda.saldoRestante || venda.valorTotal || 0);
+      }
+    }
+  });
+
+  caixa.forEach(mov => {
+    const dataMovimento = new Date(mov.data_movimento || mov.dataMovimento);
+
+    if(
+      dataMovimento >= inicio &&
+      dataMovimento <= fim &&
+      mov.tipo === 'SAIDA' &&
+      String(mov.categoria || '').toLowerCase() === 'perda'
+    ){
+      totalPerdas += Number(mov.valor || 0);
     }
   });
 
   document.getElementById('periodoVendas').innerText = totalVendas;
   document.getElementById('periodoFaturamento').innerText = dinheiro(totalFaturamento);
   document.getElementById('periodoLucro').innerText = dinheiro(totalLucro);
+  preencherTexto('periodoFiado', dinheiro(totalFiado));
+  preencherTexto('periodoPerdas', dinheiro(totalPerdas));
+}
+
+function definirPeriodoRelatorio(periodo){
+  const hoje = new Date();
+  let inicio = new Date();
+  let fim = new Date();
+
+  if(periodo === 'ontem'){
+    inicio.setDate(hoje.getDate() - 1);
+    fim.setDate(hoje.getDate() - 1);
+  }
+
+  if(periodo === '7dias'){
+    inicio.setDate(hoje.getDate() - 6);
+  }
+
+  if(periodo === 'mes'){
+    inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+  }
+
+  if(periodo === 'mesAnterior'){
+    inicio = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+  }
+
+  document.getElementById('dataInicial').value = dataInputLocal(inicio);
+  document.getElementById('dataFinal').value = dataInputLocal(fim);
+  gerarRelatorioPeriodo();
 }
 
 async function carregarVendas(){
@@ -2859,6 +3093,12 @@ function atualizarResumoVenda(){
     return;
   }
 
+  if(produtoEstaVencido(produto)){
+    cardEstoque.classList.add('erro');
+    aviso.innerText = 'Atencao: este produto esta vencido.';
+    aviso.classList.add('ativo');
+  }
+
   if(qtd > estoque){
     cardEstoque.classList.add('erro');
     aviso.innerText = `Estoque insuficiente. Disponivel: ${estoque}.`;
@@ -2922,6 +3162,14 @@ async function registrarVenda(){
     atualizarResumoVenda();
     alert(`Estoque insuficiente. Disponivel: ${Number(produto.quantidade || 0)}.`);
     return;
+  }
+
+  if(produtoEstaVencido(produto)){
+    const confirmarVencido = confirm('Este produto esta vencido. Deseja registrar a venda mesmo assim?');
+
+    if(!confirmarVencido){
+      return;
+    }
   }
 
   if(navigator.onLine){
@@ -3068,6 +3316,9 @@ async function imprimirRecibo(venda){
   const empresa = await resposta.json();
 
   const data = new Date(venda.data).toLocaleDateString('pt-BR');
+  const formaPagamento = venda.formaPagamento || (venda.status === 'Pago' ? 'Nao informado' : 'Fiado');
+  const valorPago = Number(venda.valorPago || (venda.status === 'Pago' ? venda.valorTotal : 0));
+  const saldoRestante = Number(venda.saldoRestante || 0);
 
   const conteudo = `
     <html>
@@ -3094,11 +3345,15 @@ async function imprimirRecibo(venda){
           ${empresa.instagram ? `<div>Instagram: ${empresa.instagram}</div>` : ''}
         </div>
         <hr>
+        <p><strong>Recibo:</strong> #${venda.id || '-'}</p>
         <p><strong>Cliente:</strong> ${venda.clienteNome}</p>
         <p><strong>Produto:</strong> ${venda.produtoNome}</p>
         <p><strong>Quantidade:</strong> ${venda.quantidade}</p>
         <p><strong>Status:</strong> ${venda.status}</p>
+        <p><strong>Forma de pagamento:</strong> ${formaPagamento}</p>
         <p><strong>Data:</strong> ${data}</p>
+        <p><strong>Valor pago:</strong> ${dinheiro(valorPago)}</p>
+        ${saldoRestante > 0 ? `<p><strong>Saldo restante:</strong> ${dinheiro(saldoRestante)}</p>` : ''}
         <p class="total">Total: ${dinheiro(venda.valorTotal)}</p>
         <div class="rodape">Obrigado pela preferência!</div>
       </div>
@@ -3194,8 +3449,38 @@ Qualquer dúvida estou à disposição.`;
     await navigator.clipboard.writeText(mensagem);
     alert('Cliente sem telefone cadastrado. Mensagem copiada para a área de transferência.');
   }
+
+  marcarCobradoHoje(venda.id, false);
 }
 
+
+function cobrancaHojeTexto(idVenda){
+  const cobrancas = carregarCacheLocal('cobrancasCache') || {};
+  const registro = cobrancas[idVenda];
+
+  if(!registro){
+    return '';
+  }
+
+  const data = new Date(registro.data).toLocaleDateString('pt-BR');
+  return `<span class="ok">Cobrado em ${data}</span>`;
+}
+
+function marcarCobradoHoje(idVenda, mostrarAlerta = true){
+  const cobrancas = carregarCacheLocal('cobrancasCache') || {};
+
+  cobrancas[idVenda] = {
+    data:new Date().toISOString()
+  };
+
+  salvarCacheLocal('cobrancasCache', cobrancas);
+
+  if(mostrarAlerta){
+    alert('Cobranca marcada como feita hoje.');
+  }
+
+  renderizarFiado(abertasFiadoCache || []);
+}
 async function carregarAbertas(){
   let abertas = [];
 
@@ -3539,6 +3824,42 @@ async function exportarJson(tabela){
   }
 
   baixarJson(`${tabela}-gestao-danones.json`, dados);
+}
+
+async function criarModoTeste(){
+  const mensagem = document.getElementById('mensagemModoTeste');
+  const resposta = await fetch('/modo-teste/criar',{
+    method:'POST'
+  });
+  const dados = await resposta.json();
+
+  mensagem.style.color = dados.erro ? 'red' : 'green';
+  mensagem.innerText = dados.erro || dados.mensagem;
+
+  if(!dados.erro){
+    await carregar();
+  }
+}
+
+async function limparModoTeste(){
+  const confirmar = confirm('Remover Cliente Teste, Produtos Teste, vendas, pagamentos e caixa ligados a eles?');
+
+  if(!confirmar){
+    return;
+  }
+
+  const mensagem = document.getElementById('mensagemModoTeste');
+  const resposta = await fetch('/modo-teste/limpar',{
+    method:'DELETE'
+  });
+  const dados = await resposta.json();
+
+  mensagem.style.color = dados.erro ? 'red' : 'green';
+  mensagem.innerText = dados.erro || dados.mensagem;
+
+  if(!dados.erro){
+    await carregar();
+  }
 }
 
 document.addEventListener('DOMContentLoaded',function(){
@@ -3945,6 +4266,7 @@ function renderizarFiado(abertas){
       ? new Date(venda.dataVencimento).toLocaleDateString('pt-BR')
       : '-';
     const situacao = situacaoCobranca(venda.dataVencimento);
+    const cobrancaTexto = cobrancaHojeTexto(venda.id);
     const vendaTexto = encodeURIComponent(JSON.stringify(venda));
 
     html += `
@@ -3957,10 +4279,11 @@ function renderizarFiado(abertas){
         <td>${dinheiro(saldo)}</td>
         <td>${data}</td>
         <td>${vencimento}</td>
-        <td>${situacao}</td>
+        <td>${situacao} ${cobrancaTexto}</td>
         <td>
           <button onclick="receberVenda(${venda.id}, ${saldo})">Receber</button>
           <button onclick="cobrarCliente(JSON.parse(decodeURIComponent('${vendaTexto}')))">Cobrar</button>
+          <button onclick="marcarCobradoHoje(${venda.id})">Cobrado hoje</button>
         </td>
       </tr>
     `;
@@ -3972,7 +4295,7 @@ function renderizarFiado(abertas){
             <h3>${venda.clienteNome}</h3>
             <p>${venda.produtoNome} - Qtd: ${venda.quantidade}</p>
           </div>
-          <div class="fiado-status">${situacao}</div>
+          <div class="fiado-status">${situacao} ${cobrancaTexto}</div>
         </div>
 
         <div class="fiado-valores">
@@ -3989,6 +4312,7 @@ function renderizarFiado(abertas){
         <div class="fiado-card-acoes">
           <button onclick="receberVenda(${venda.id}, ${saldo})">Receber</button>
           <button onclick="cobrarCliente(JSON.parse(decodeURIComponent('${vendaTexto}')))">Cobrar</button>
+          <button onclick="marcarCobradoHoje(${venda.id})">Cobrado hoje</button>
         </div>
       </div>
     `;
@@ -4104,7 +4428,105 @@ function mostrarCaixaNaTela(movimentacoes){
   document.getElementById('caixaSaldo').innerText = dinheiro(entradas - saidas);
   atualizarRelatorioFormasPagamento(movimentacoes);
   atualizarRelatorioPerdas(movimentacoes);
+  atualizarFechamentoDia();
   atualizarResumoHoje();
+}
+
+function atualizarFechamentoDia(){
+  const vendas = carregarCacheLocal('vendasCache') || [];
+  const caixa = carregarCacheLocal('caixaCache') || [];
+  const hoje = new Date();
+
+  let entradas = 0;
+  let saidas = 0;
+  let vendasHoje = 0;
+  let lucroHoje = 0;
+  let perdasHoje = 0;
+
+  const movimentacoesHoje = caixa.filter(mov => mesmaData(mov.data_movimento || mov.dataMovimento, hoje));
+
+  movimentacoesHoje.forEach(mov => {
+    const valor = Number(mov.valor || 0);
+
+    if(mov.tipo === 'ENTRADA'){
+      entradas += valor;
+    }else{
+      saidas += valor;
+    }
+
+    if(mov.tipo === 'SAIDA' && String(mov.categoria || '').toLowerCase() === 'perda'){
+      perdasHoje += valor;
+    }
+  });
+
+  vendas
+    .filter(venda => mesmaData(venda.data, hoje))
+    .forEach(venda => {
+      vendasHoje++;
+      lucroHoje += Number(venda.lucro || 0);
+    });
+
+  preencherTexto('fechamentoEntradas', dinheiro(entradas));
+  preencherTexto('fechamentoSaidas', dinheiro(saidas));
+  preencherTexto('fechamentoSaldo', dinheiro(entradas - saidas));
+  preencherTexto('fechamentoVendas', vendasHoje);
+  preencherTexto('fechamentoLucro', dinheiro(lucroHoje));
+  preencherTexto('fechamentoPerdas', dinheiro(perdasHoje));
+
+  const formas = resumirFormasPagamento(movimentacoesHoje);
+  const textoFormas = Object.keys(formas)
+    .sort((a,b) => formas[b].total - formas[a].total)
+    .map(forma => `${forma}: ${dinheiro(formas[forma].total)}`)
+    .join(' | ');
+
+  preencherTexto('formaHojeDinheiro', dinheiro(formas.Dinheiro ? formas.Dinheiro.total : 0));
+  preencherTexto('formaHojePix', dinheiro(formas.Pix ? formas.Pix.total : 0));
+  preencherTexto('formaHojeCartao', dinheiro(formas.Cartao ? formas.Cartao.total : 0));
+  preencherTexto('formaHojeMisto', dinheiro(formas.Misto ? formas.Misto.total : 0));
+  preencherTexto('fechamentoFormas', `Formas de pagamento do dia: ${textoFormas || '-'}`);
+}
+
+function imprimirFechamentoDia(){
+  atualizarFechamentoDia();
+
+  const observacao = document.getElementById('fechamentoObservacao')
+    ? document.getElementById('fechamentoObservacao').value.trim()
+    : '';
+  const data = new Date().toLocaleDateString('pt-BR');
+
+  const conteudo = `
+    <html>
+    <head>
+      <title>Fechamento do Dia</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:18px;color:#111;}
+        .recibo{max-width:420px;margin:0 auto;border:1px solid #ddd;border-radius:8px;padding:16px;}
+        h2{text-align:center;margin:0 0 12px;}
+        p{margin:8px 0;}
+        .total{font-size:18px;font-weight:700;border-top:1px solid #ddd;padding-top:10px;margin-top:10px;}
+      </style>
+    </head>
+    <body>
+      <div class="recibo">
+        <h2>Fechamento do Dia</h2>
+        <p><strong>Data:</strong> ${data}</p>
+        <p><strong>Entradas:</strong> ${document.getElementById('fechamentoEntradas').innerText}</p>
+        <p><strong>Saidas:</strong> ${document.getElementById('fechamentoSaidas').innerText}</p>
+        <p class="total"><strong>Saldo:</strong> ${document.getElementById('fechamentoSaldo').innerText}</p>
+        <p><strong>Vendas:</strong> ${document.getElementById('fechamentoVendas').innerText}</p>
+        <p><strong>Lucro:</strong> ${document.getElementById('fechamentoLucro').innerText}</p>
+        <p><strong>Perdas:</strong> ${document.getElementById('fechamentoPerdas').innerText}</p>
+        <p><strong>Formas:</strong> ${document.getElementById('fechamentoFormas').innerText}</p>
+        ${observacao ? `<p><strong>Observacoes:</strong> ${observacao}</p>` : ''}
+      </div>
+      <script>window.onload = function(){window.print();}<\/script>
+    </body>
+    </html>
+  `;
+
+  const janela = window.open('', '_blank');
+  janela.document.write(conteudo);
+  janela.document.close();
 }
 
 function atualizarRelatorioFormasPagamento(movimentacoes){
@@ -4210,17 +4632,20 @@ function aplicarFiltrosCaixa(){
   const busca = document.getElementById('buscaCaixa');
   const tipoSelect = document.getElementById('filtroCaixaTipo');
   const categoriaSelect = document.getElementById('filtroCaixaCategoria');
+  const formaSelect = document.getElementById('filtroCaixaForma');
   const termo = busca ? busca.value.trim().toLowerCase() : '';
   const tipo = tipoSelect ? tipoSelect.value : 'todos';
   const categoria = categoriaSelect ? categoriaSelect.value : 'todos';
+  const forma = formaSelect ? formaSelect.value : 'todos';
 
   const filtradas = movimentacoes.filter(mov => {
     const texto = `${mov.categoria || ''} ${mov.descricao || ''}`.toLowerCase();
     const buscaOk = !termo || texto.includes(termo);
     const tipoOk = tipo === 'todos' || mov.tipo === tipo;
     const categoriaOk = categoria === 'todos' || mov.categoria === categoria;
+    const formaOk = forma === 'todos' || extrairFormaPagamento(mov.descricao) === forma;
 
-    return buscaOk && tipoOk && categoriaOk && caixaPassaPeriodo(mov);
+    return buscaOk && tipoOk && categoriaOk && formaOk && caixaPassaPeriodo(mov);
   });
 
   let html = '';
