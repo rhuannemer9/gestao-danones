@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gestao-danones-v3';
+const CACHE_NAME = 'gestao-danones-v5';
 
 const ARQUIVOS_CACHE = [
   '/',

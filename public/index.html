@@ -37,6 +37,8 @@
   </div>
 
   <div class="acoes-topo">
+    <input id="buscaGeral" placeholder="Busca geral..." onkeydown="if(event.key === 'Enter') buscarGeral()">
+    <button onclick="buscarGeral()">Buscar</button>
     <span id="statusConexao" class="status-online">🟢 Online</span>
     <span id="statusCache" class="status-cache">📦 Cache ainda não carregado</span>
     <span id="statusFilaSync" class="status-cache">✅ Tudo sincronizado</span>
@@ -52,6 +54,7 @@
   <button id="btnClientes" onclick="mostrarAba('clientes')">👥 Clientes</button>
   <button id="btnVendas" onclick="mostrarAba('vendas')">💰 Vendas</button>
   <button id="btnFiado" onclick="mostrarAba('fiado')">💳 Fiado</button>
+  <button id="btnFornecedores" onclick="mostrarAba('fornecedores')">Fornecedores</button>
   <button id="btnCaixa" onclick="mostrarAba('caixa')">💰 Caixa</button>
   <button id="btnRelatorios" onclick="mostrarAba('relatorios')">📊 Relatórios</button>
   <button id="btnConfiguracoes" onclick="mostrarAba('configuracoes')">⚙️ Configurações</button>
@@ -145,7 +148,9 @@
     </div>
     <div id="fechamentoFormas" class="vendas-filtros-info">Formas de pagamento do dia: -</div>
     <textarea id="fechamentoObservacao" placeholder="Observacoes do fechamento do dia"></textarea>
+    <button onclick="salvarFechamentoDia()">Salvar fechamento</button>
     <button onclick="imprimirFechamentoDia()">Imprimir fechamento</button>
+    <div id="historicoFechamentos" class="vendas-filtros-info"></div>
   </div>
   <div class="dashboard-alertas">
     <div class="alert-card">
@@ -396,6 +401,70 @@
 
 </div>
 
+<div id="abaFornecedores" class="aba">
+  <div class="card">
+    <h2>Fornecedores</h2>
+    <input id="fornecedorNome" placeholder="Nome do fornecedor">
+    <input id="fornecedorContato" placeholder="Contato / telefone">
+    <input id="fornecedorObs" placeholder="Observacoes">
+    <button onclick="salvarFornecedor()">Salvar Fornecedor</button>
+  </div>
+
+  <div class="card">
+    <h2>Registrar Compra de Mercadoria</h2>
+    <select id="compraFornecedor"></select>
+    <select id="compraProduto"></select>
+    <input id="compraQuantidade" type="number" min="1" placeholder="Quantidade">
+    <input id="compraValorTotal" type="number" step="0.01" placeholder="Valor total">
+    <input id="compraData" type="date">
+    <select id="compraFormaPagamento">
+      <option value="Pix">Pix</option>
+      <option value="Dinheiro">Dinheiro</option>
+      <option value="Cartao">Cartao</option>
+      <option value="Boleto">Boleto</option>
+      <option value="Fiado fornecedor">Fiado fornecedor</option>
+      <option value="Misto">Misto</option>
+    </select>
+    <select id="compraStatus">
+      <option value="Pago">Pago</option>
+      <option value="Pendente">Pendente</option>
+      <option value="Parcial">Parcial</option>
+    </select>
+    <input id="compraValorPago" type="number" step="0.01" placeholder="Valor pago agora">
+    <input id="compraObs" placeholder="Observacao da compra">
+    <label><input id="compraAtualizarEstoque" type="checkbox" checked> Atualizar estoque</label>
+    <label><input id="compraLancarCaixa" type="checkbox" checked> Lancar pagamento no caixa</label>
+    <button onclick="registrarCompraFornecedor()">Registrar Compra</button>
+  </div>
+
+  <div class="dashboard-secundario">
+    <div class="dash-mini">Fornecedores<strong id="totalFornecedores">0</strong></div>
+    <div class="dash-mini">Compras<strong id="totalComprasFornecedor">0</strong></div>
+    <div class="dash-mini">Total comprado<strong id="valorComprasFornecedor">R$ 0,00</strong></div>
+    <div class="dash-mini">Pendente<strong id="valorPendenteFornecedor">R$ 0,00</strong></div>
+  </div>
+
+  <div class="card">
+    <h2>Lista de Fornecedores</h2>
+    <table>
+      <thead>
+        <tr><th>Nome</th><th>Contato</th><th>Observacoes</th><th>Acoes</th></tr>
+      </thead>
+      <tbody id="listaFornecedores"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Historico de Compras</h2>
+    <input id="buscaCompraFornecedor" placeholder="Buscar fornecedor ou produto..." oninput="carregarFornecedores()">
+    <table>
+      <thead>
+        <tr><th>Data</th><th>Fornecedor</th><th>Produto</th><th>Qtd</th><th>Total</th><th>Pago</th><th>Status</th><th>Forma</th><th>Acoes</th></tr>
+      </thead>
+      <tbody id="listaComprasFornecedor"></tbody>
+    </table>
+  </div>
+</div>
 <div id="abaCaixa" class="aba">
   <div class="dashboard-principal">
     <div class="dash-card sucesso">
@@ -811,6 +880,54 @@ function mostrarAba(nome){
   if(botao) botao.classList.add('ativo');
 }
 
+function buscarGeral(){
+  const campo = document.getElementById('buscaGeral');
+  const termo = campo ? campo.value.trim().toLowerCase() : '';
+
+  if(!termo){
+    alert('Digite algo para buscar.');
+    return;
+  }
+
+  const clientes = carregarCacheLocal('clientesCache') || [];
+  const produtos = carregarCacheLocal('produtosCache') || [];
+  const vendas = carregarCacheLocal('vendasCache') || [];
+  const abertas = carregarCacheLocal('abertasCache') || [];
+
+  const clientesEncontrados = clientes.filter(item =>
+    `${item.nome || ''} ${item.telefone || ''} ${item.endereco || ''}`.toLowerCase().includes(termo)
+  );
+  const produtosEncontrados = produtos.filter(item =>
+    `${item.nome || ''} ${item.categoria || ''}`.toLowerCase().includes(termo)
+  );
+  const vendasEncontradas = vendas.filter(item =>
+    `${item.clienteNome || ''} ${item.produtoNome || ''}`.toLowerCase().includes(termo)
+  );
+  const fiadoEncontrado = abertas.filter(item =>
+    `${item.clienteNome || ''} ${item.produtoNome || ''}`.toLowerCase().includes(termo)
+  );
+
+  abrirModalAcao({
+    titulo:'Busca geral',
+    descricao:`Resultados para "${termo}"`,
+    confirmarTexto:'Fechar',
+    campos:[
+      {
+        tipo:'info',
+        texto:[
+          `Clientes: ${clientesEncontrados.slice(0,5).map(item => item.nome).join(', ') || 'nenhum'}`,
+          `Produtos: ${produtosEncontrados.slice(0,5).map(item => item.nome).join(', ') || 'nenhum'}`,
+          `Vendas: ${vendasEncontradas.length}`,
+          `Fiado: ${fiadoEncontrado.length}`
+        ].join('\n')
+      }
+    ],
+    aoConfirmar:function(){
+      fecharModalAcao();
+    }
+  });
+}
+
 async function fazerLogin(){
   const usuario = document.getElementById('loginUsuario').value;
   const senha = document.getElementById('loginSenha').value;
@@ -942,6 +1059,7 @@ async function carregar(){
   await carregarCaixa();
   await carregarEmpresa();
   await carregarCategorias();
+  carregarFornecedores();
   await carregarGraficoPizza();
 }
 
@@ -986,6 +1104,18 @@ function atualizarStatusCache(){
 
 function gerarSyncId(tipo){
   return `${tipo}-${Date.now()}-${Math.random().toString(36).substring(2,10)}`;
+}
+
+function registrarHistoricoEstoqueLocal(item){
+  const historico = carregarCacheLocal('historicoEstoqueCache') || [];
+
+  historico.unshift({
+    id:Date.now(),
+    data:new Date().toISOString(),
+    ...item
+  });
+
+  salvarCacheLocal('historicoEstoqueCache', historico.slice(0,500));
 }
 
 async function carregarProdutos(){
@@ -1213,70 +1343,6 @@ async function cadastrar(){
   carregar();
 }
 
-async function entrada(id){
-  const qtd = prompt('Quantidade de entrada:');
-  if(!qtd) return;
-
-  await fetch(`/produtos/${id}/entrada`,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({quantidade:Number(qtd)})
-  });
-
-  carregar();
-}
-
-async function saida(id){
-  const qtd = prompt('Quantidade de saída/venda:');
-  if(!qtd) return;
-
-  const resposta = await fetch(`/produtos/${id}/saida`,{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({quantidade:Number(qtd)})
-  });
-
-  const dados = await resposta.json();
-  if(dados.erro) alert(dados.erro);
-
-  carregar();
-}
-
-async function editarProduto(id){
-  const resposta = await fetch('/produtos');
-  const produtos = await resposta.json();
-  const produto = produtos.find(p => p.id === id);
-
-  if(!produto){
-    alert('Produto não encontrado.');
-    return;
-  }
-
-  const novoNome = prompt('Nome:', produto.nome);
-  const novoCusto = prompt('Custo:', produto.custo);
-  const novoPreco = prompt('Preço de venda:', produto.precoVenda);
-  const novaQuantidade = prompt('Quantidade:', produto.quantidade);
-  const novaValidade = prompt('Validade (AAAA-MM-DD):', produto.validade);
-  const novaCategoria = prompt('Categoria:', produto.categoria || 'Danones');
-
-  if(!novoNome) return;
-
-  await fetch(`/produtos/${id}`,{
-    method:'PUT',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      nome:novoNome,
-      custo:Number(novoCusto),
-      precoVenda:Number(novoPreco),
-      quantidade:Number(novaQuantidade),
-      validade:novaValidade,
-      categoria:novaCategoria
-    })
-  });
-
-  carregar();
-}
-
 async function excluirProduto(id){
   if(!confirm('Excluir produto?')) return;
 
@@ -1301,6 +1367,9 @@ async function entrada(id){
     ],
     aoConfirmar: async function(){
       const quantidade = numeroDigitado(valorModal('modalQuantidade'));
+      const produtos = carregarCacheLocal('produtosCache') || [];
+      const produto = produtos.find(item => Number(item.id) === Number(id));
+      const estoqueAntes = produto ? Number(produto.quantidade || 0) : null;
 
       if(!quantidade || quantidade <= 0){
         alert('Informe uma quantidade valida.');
@@ -1312,6 +1381,18 @@ async function entrada(id){
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({quantidade})
       });
+
+      if(produto){
+        registrarHistoricoEstoqueLocal({
+          produtoId:id,
+          produtoNome:produto.nome,
+          tipo:'Entrada',
+          quantidade,
+          estoqueAntes,
+          estoqueDepois:estoqueAntes + quantidade,
+          origem:'Entrada manual'
+        });
+      }
 
       fecharModalAcao();
       carregar();
@@ -1336,6 +1417,9 @@ async function saida(id){
     ],
     aoConfirmar: async function(){
       const quantidade = numeroDigitado(valorModal('modalQuantidade'));
+      const produtos = carregarCacheLocal('produtosCache') || [];
+      const produto = produtos.find(item => Number(item.id) === Number(id));
+      const estoqueAntes = produto ? Number(produto.quantidade || 0) : null;
 
       if(!quantidade || quantidade <= 0){
         alert('Informe uma quantidade valida.');
@@ -1353,6 +1437,18 @@ async function saida(id){
       if(dados.erro){
         alert(dados.erro);
         return;
+      }
+
+      if(produto){
+        registrarHistoricoEstoqueLocal({
+          produtoId:id,
+          produtoNome:produto.nome,
+          tipo:'Saida',
+          quantidade,
+          estoqueAntes,
+          estoqueDepois:Math.max(estoqueAntes - quantidade, 0),
+          origem:'Saida manual'
+        });
       }
 
       fecharModalAcao();
@@ -1450,6 +1546,17 @@ async function baixaPerdaProduto(id){
         return;
       }
 
+      registrarHistoricoEstoqueLocal({
+        produtoId:id,
+        produtoNome:produto.nome,
+        tipo:'Perda',
+        quantidade,
+        estoqueAntes:Number(produto.quantidade || 0),
+        estoqueDepois:Number(produto.quantidade || 0) - quantidade,
+        origem:`Baixa/Perda - ${motivo}`,
+        valor:Number(produto.custo || 0) * quantidade
+      });
+
       fecharModalAcao();
       await carregar();
     }
@@ -1460,6 +1567,7 @@ function verHistoricoProduto(id){
   const produtos = carregarCacheLocal('produtosCache') || [];
   const vendas = carregarCacheLocal('vendasCache') || [];
   const caixa = carregarCacheLocal('caixaCache') || [];
+  const historicoEstoque = carregarCacheLocal('historicoEstoqueCache') || [];
   const produto = produtos.find(p => Number(p.id) === Number(id));
 
   if(!produto){
@@ -1477,6 +1585,9 @@ function verHistoricoProduto(id){
       String(mov.descricao || '').toLowerCase().includes(String(produto.nome || '').toLowerCase())
     )
     .sort((a,b) => new Date(b.data_movimento || b.dataMovimento) - new Date(a.data_movimento || a.dataMovimento));
+  const movimentosProduto = historicoEstoque
+    .filter(item => Number(item.produtoId) === Number(id))
+    .sort((a,b) => new Date(b.data) - new Date(a.data));
 
   const quantidadeVendida = vendasProduto.reduce((soma, venda) => soma + Number(venda.quantidade || 0), 0);
   const faturamento = vendasProduto.reduce((soma, venda) => soma + Number(venda.valorTotal || 0), 0);
@@ -1496,6 +1607,13 @@ function verHistoricoProduto(id){
     });
   }else{
     historico += 'Nenhuma venda registrada para este produto.\n';
+  }
+
+  if(movimentosProduto.length){
+    historico += '\nMovimentos de estoque:\n';
+    movimentosProduto.slice(0,10).forEach(item => {
+      historico += `- ${new Date(item.data).toLocaleDateString('pt-BR')} | ${item.tipo} | Qtd ${item.quantidade} | ${item.origem || '-'} | ${item.estoqueAntes ?? '-'} -> ${item.estoqueDepois ?? '-'}\n`;
+    });
   }
 
   if(perdasProduto.length){
@@ -1609,6 +1727,187 @@ async function editarProduto(id){
   });
 }
 
+function carregarFornecedores(){
+  const fornecedores = carregarCacheLocal('fornecedoresCache') || [];
+  const compras = carregarCacheLocal('comprasFornecedoresCache') || [];
+  const produtos = carregarCacheLocal('produtosCache') || [];
+  const busca = document.getElementById('buscaCompraFornecedor');
+  const termo = busca ? busca.value.trim().toLowerCase() : '';
+
+  const selectFornecedor = document.getElementById('compraFornecedor');
+  if(selectFornecedor){
+    selectFornecedor.innerHTML = '<option value="">Selecione o fornecedor</option>' +
+      fornecedores.map(f => `<option value="${f.id}">${f.nome}</option>`).join('');
+  }
+
+  const selectProduto = document.getElementById('compraProduto');
+  if(selectProduto){
+    selectProduto.innerHTML = '<option value="">Selecione o produto</option>' +
+      produtos.map(p => `<option value="${p.id}">${p.nome} - Estoque: ${Number(p.quantidade || 0)}</option>`).join('');
+  }
+
+  const listaFornecedores = document.getElementById('listaFornecedores');
+  if(listaFornecedores){
+    listaFornecedores.innerHTML = fornecedores.map(f => `
+      <tr>
+        <td>${f.nome}</td>
+        <td>${f.contato || '-'}</td>
+        <td>${f.observacoes || '-'}</td>
+        <td><button onclick="excluirFornecedor(${f.id})">Excluir</button></td>
+      </tr>
+    `).join('') || '<tr><td colspan="4">Nenhum fornecedor cadastrado.</td></tr>';
+  }
+
+  const comprasFiltradas = compras.filter(compra => {
+    const texto = `${compra.fornecedorNome || ''} ${compra.produtoNome || ''}`.toLowerCase();
+    return !termo || texto.includes(termo);
+  });
+
+  const listaCompras = document.getElementById('listaComprasFornecedor');
+  if(listaCompras){
+    listaCompras.innerHTML = comprasFiltradas.map(compra => `
+      <tr>
+        <td>${new Date(compra.data).toLocaleDateString('pt-BR')}</td>
+        <td>${compra.fornecedorNome}</td>
+        <td>${compra.produtoNome}</td>
+        <td>${compra.quantidade}</td>
+        <td>${dinheiro(compra.valorTotal)}</td>
+        <td>${dinheiro(compra.valorPago)}</td>
+        <td>${compra.status}</td>
+        <td>${compra.formaPagamento}</td>
+        <td><button onclick="excluirCompraFornecedor(${compra.id})">Excluir</button></td>
+      </tr>
+    `).join('') || '<tr><td colspan="9">Nenhuma compra registrada.</td></tr>';
+  }
+
+  const totalComprado = compras.reduce((soma, compra) => soma + Number(compra.valorTotal || 0), 0);
+  const totalPago = compras.reduce((soma, compra) => soma + Number(compra.valorPago || 0), 0);
+
+  preencherTexto('totalFornecedores', fornecedores.length);
+  preencherTexto('totalComprasFornecedor', compras.length);
+  preencherTexto('valorComprasFornecedor', dinheiro(totalComprado));
+  preencherTexto('valorPendenteFornecedor', dinheiro(Math.max(totalComprado - totalPago, 0)));
+}
+
+function salvarFornecedor(){
+  const nome = document.getElementById('fornecedorNome').value.trim();
+
+  if(!nome){
+    alert('Informe o nome do fornecedor.');
+    return;
+  }
+
+  const fornecedores = carregarCacheLocal('fornecedoresCache') || [];
+  fornecedores.unshift({
+    id:Date.now(),
+    nome,
+    contato:document.getElementById('fornecedorContato').value.trim(),
+    observacoes:document.getElementById('fornecedorObs').value.trim(),
+    criadoEm:new Date().toISOString()
+  });
+
+  salvarCacheLocal('fornecedoresCache', fornecedores);
+  document.getElementById('fornecedorNome').value = '';
+  document.getElementById('fornecedorContato').value = '';
+  document.getElementById('fornecedorObs').value = '';
+  carregarFornecedores();
+}
+
+function excluirFornecedor(id){
+  const compras = carregarCacheLocal('comprasFornecedoresCache') || [];
+
+  if(compras.some(compra => Number(compra.fornecedorId) === Number(id))){
+    alert('Este fornecedor possui compras registradas. Mantenha o cadastro para preservar o historico.');
+    return;
+  }
+
+  if(!confirm('Excluir fornecedor?')){
+    return;
+  }
+
+  const fornecedores = carregarCacheLocal('fornecedoresCache') || [];
+  salvarCacheLocal('fornecedoresCache', fornecedores.filter(f => Number(f.id) !== Number(id)));
+  carregarFornecedores();
+}
+
+async function registrarCompraFornecedor(){
+  const fornecedorId = Number(document.getElementById('compraFornecedor').value);
+  const produtoId = Number(document.getElementById('compraProduto').value);
+  const quantidade = numeroDigitado(document.getElementById('compraQuantidade').value);
+  const valorTotal = numeroDigitado(document.getElementById('compraValorTotal').value);
+  const status = document.getElementById('compraStatus').value;
+  const formaPagamento = document.getElementById('compraFormaPagamento').value;
+  const valorPagoInput = numeroDigitado(document.getElementById('compraValorPago').value);
+  const dataInput = document.getElementById('compraData').value;
+  const atualizarEstoque = document.getElementById('compraAtualizarEstoque').checked;
+  const lancarCaixa = document.getElementById('compraLancarCaixa').checked;
+  const fornecedores = carregarCacheLocal('fornecedoresCache') || [];
+  const produtos = carregarCacheLocal('produtosCache') || [];
+  const fornecedor = fornecedores.find(f => Number(f.id) === fornecedorId);
+  const produto = produtos.find(p => Number(p.id) === produtoId);
+
+  if(!fornecedor || !produto || !quantidade || quantidade <= 0 || !valorTotal || valorTotal <= 0){
+    alert('Preencha fornecedor, produto, quantidade e valor total.');
+    return;
+  }
+
+  const valorPago = status === 'Pendente' ? 0 : (valorPagoInput > 0 ? valorPagoInput : valorTotal);
+  const dataCompra = dataInput ? new Date(dataInput + 'T12:00:00') : new Date();
+  const estoqueAntes = Number(produto.quantidade || 0);
+  const compra = {
+    id:Date.now(), fornecedorId, fornecedorNome:fornecedor.nome, produtoId, produtoNome:produto.nome,
+    quantidade, valorTotal, valorPago, status, formaPagamento, data:dataCompra.toISOString(),
+    observacao:document.getElementById('compraObs').value.trim(), atualizouEstoque:atualizarEstoque,
+    lancouCaixa:lancarCaixa && valorPago > 0
+  };
+
+  if(atualizarEstoque){
+    try{
+      const resposta = await fetch(`/produtos/${produtoId}/entrada`,{
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({quantidade})
+      });
+      const dados = await resposta.json();
+      if(dados.erro){ alert(dados.erro); return; }
+      registrarHistoricoEstoqueLocal({
+        produtoId, produtoNome:produto.nome, tipo:'Entrada', quantidade,
+        estoqueAntes, estoqueDepois:estoqueAntes + quantidade,
+        origem:`Compra fornecedor - ${fornecedor.nome}`, valor:valorTotal
+      });
+    }catch{
+      alert('Nao foi possivel atualizar o estoque agora.');
+      return;
+    }
+  }
+
+  if(lancarCaixa && valorPago > 0){
+    await fetch('/caixa',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        syncId:gerarSyncId('compra'), tipo:'SAIDA', categoria:'Mercadoria',
+        descricao:`Compra fornecedor - ${fornecedor.nome} - ${produto.nome} - ${formaPagamento}`,
+        valor:valorPago, dataMovimento:dataCompra.toISOString()
+      })
+    });
+  }
+
+  const compras = carregarCacheLocal('comprasFornecedoresCache') || [];
+  compras.unshift(compra);
+  salvarCacheLocal('comprasFornecedoresCache', compras);
+  ['compraQuantidade','compraValorTotal','compraValorPago','compraObs'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('compraData').value = '';
+  await carregarProdutos();
+  await carregarCaixa();
+  carregarFornecedores();
+}
+
+function excluirCompraFornecedor(id){
+  if(!confirm('Excluir registro da compra? Isso nao desfaz automaticamente estoque ou caixa ja lancados.')){
+    return;
+  }
+  const compras = carregarCacheLocal('comprasFornecedoresCache') || [];
+  salvarCacheLocal('comprasFornecedoresCache', compras.filter(compra => Number(compra.id) !== Number(id)));
+  carregarFornecedores();
+}
 async function carregarPagamentosVenda(idVenda){
   try{
     const resposta = await fetch(`/pagamentos-venda/${idVenda}`);
@@ -2088,93 +2387,6 @@ async function editarCliente(id){
   const cliente = clientes.find(c => Number(c.id) === Number(id));
 
   if(!cliente){
-    alert('Cliente não encontrado.');
-    return;
-  }
-
-  const novoNome = prompt('Nome:', cliente.nome || '');
-  const novoTelefone = prompt('Telefone:', cliente.telefone || '');
-  const novoEndereco = prompt('Endereço:', cliente.endereco || '');
-  const novasObs = prompt('Observações:', cliente.observacoes || '');
-
-  if(!novoNome){
-    return;
-  }
-
-  const clienteAtualizado = {
-    ...cliente,
-    nome: novoNome,
-    telefone: novoTelefone,
-    endereco: novoEndereco,
-    observacoes: novasObs
-  };
-
-  const clientesCache = clientes.map(c =>
-    Number(c.id) === Number(id) ? clienteAtualizado : c
-  );
-
-  salvarCacheLocal('clientesCache', clientesCache);
-
-  if(navigator.onLine){
-    try{
-      const resposta = await fetch(`/clientes/${id}`,{
-        method:'PUT',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          nome: novoNome,
-          telefone: novoTelefone,
-          endereco: novoEndereco,
-          observacoes: novasObs
-        })
-      });
-
-      const dados = await resposta.json();
-
-      if(dados.erro){
-        alert(dados.erro);
-        return;
-      }
-    }catch{
-      adicionarFilaSync({
-        tipo: 'cliente',
-        acao: 'editar',
-        id,
-        dados: clienteAtualizado
-      });
-
-      alert('Alteração salva localmente para sincronizar depois.');
-    }
-  }else{
-    adicionarFilaSync({
-      tipo: 'cliente',
-      acao: 'editar',
-      id,
-      dados: clienteAtualizado
-    });
-
-    alert('Alteração salva offline. Será sincronizada depois.');
-  }
-
-  carregarClientes();
-}
-
-async function editarCliente(id){
-  let clientes = [];
-
-  try{
-    const resposta = await fetch('/clientes');
-    if(!resposta.ok){
-      throw new Error('Erro ao buscar clientes');
-    }
-    clientes = await resposta.json();
-    salvarCacheLocal('clientesCache', clientes);
-  }catch{
-    clientes = carregarCacheLocal('clientesCache') || [];
-  }
-
-  const cliente = clientes.find(c => Number(c.id) === Number(id));
-
-  if(!cliente){
     alert('Cliente nao encontrado.');
     return;
   }
@@ -2271,7 +2483,7 @@ async function editarCliente(id){
           dados: clienteAtualizado
         });
 
-        alert('Alteracao salva offline. Sera sincronizada depois.');
+        alert('Alteracao salva offline. Ser? sincronizada depois.');
       }
 
       fecharModalAcao();
@@ -2466,6 +2678,10 @@ async function receberVenda(id, saldoAtual){
 
 async function processarRecebimentoVenda(id, valorRecebido, formaPagamento = 'Nao informado'){
   const syncId = gerarSyncId('pagamento');
+  const vendasCacheInicial = carregarCacheLocal('vendasCache') || [];
+  const abertasCacheInicial = carregarCacheLocal('abertasCache') || [];
+  const vendaBaseInicial = abertasCacheInicial.find(venda => Number(venda.id) === Number(id))
+    || vendasCacheInicial.find(venda => Number(venda.id) === Number(id));
 
   if(navigator.onLine){
     try{
@@ -2486,6 +2702,16 @@ async function processarRecebimentoVenda(id, valorRecebido, formaPagamento = 'Na
       }
 
       alert('Pagamento registrado com sucesso.');
+
+      if(confirm('Deseja imprimir o recibo deste recebimento?')){
+        await imprimirReciboRecebimento({
+          venda: vendaBaseInicial || dados.venda,
+          valorRecebido,
+          formaPagamento,
+          saldoRestante: dados.venda ? Number(dados.venda.saldoRestante || 0) : 0
+        });
+      }
+
       await carregar();
       return;
 
@@ -2548,7 +2774,20 @@ async function processarRecebimentoVenda(id, valorRecebido, formaPagamento = 'Na
     }
   });
 
-  alert('Pagamento salvo offline. Sera sincronizado quando a internet voltar.');
+  alert('Pagamento salvo offline. Ser? sincronizado quando a internet voltar.');
+
+  if(confirm('Deseja imprimir o recibo deste recebimento?')){
+    const valorTotal = Number(vendaBase ? vendaBase.valorTotal || 0 : 0);
+    const valorPagoAtual = Number(vendaBase ? vendaBase.valorPago || 0 : 0);
+    const saldoRestante = Math.max(valorTotal - Math.min(valorPagoAtual + valorRecebido, valorTotal), 0);
+
+    await imprimirReciboRecebimento({
+      venda: vendaBase,
+      valorRecebido,
+      formaPagamento,
+      saldoRestante
+    });
+  }
 
   await carregarVendas();
   await carregarAbertas();
@@ -3198,6 +3437,17 @@ async function registrarVenda(){
       quantidadeInput.value = '';
       atualizarResumoVenda();
 
+      registrarHistoricoEstoqueLocal({
+        produtoId,
+        produtoNome:produto.nome,
+        tipo:'Venda',
+        quantidade,
+        estoqueAntes:Number(produto.quantidade || 0),
+        estoqueDepois:Number(produto.quantidade || 0) - quantidade,
+        origem:`Venda - ${cliente.nome}`,
+        valor:Number(dados.valorTotal || 0)
+      });
+
       const gerarRecibo = confirm('Venda registrada com sucesso. Deseja imprimir o recibo?');
 
       if(gerarRecibo){
@@ -3274,6 +3524,17 @@ async function registrarVenda(){
 
   salvarCacheLocal('produtosCache', novoEstoque);
 
+  registrarHistoricoEstoqueLocal({
+    produtoId,
+    produtoNome:produto.nome,
+    tipo:'Venda',
+    quantidade,
+    estoqueAntes:Number(produto.quantidade || 0),
+    estoqueDepois:Number(produto.quantidade || 0) - quantidade,
+    origem:`Venda offline - ${cliente.nome}`,
+    valor:valorTotal
+  });
+
   if(status === 'Pago'){
     adicionarCaixaAutomaticoLocal({
       syncId:`caixa-venda-${syncId}`,
@@ -3302,7 +3563,7 @@ async function registrarVenda(){
   quantidadeInput.value = '';
   atualizarResumoVenda();
 
-  alert('Venda salva offline. Sera sincronizada quando a internet voltar.');
+  alert('Venda salva offline. Ser? sincronizada quando a internet voltar.');
 
   await carregarProdutos();
   await carregarVendas();
@@ -3363,6 +3624,72 @@ async function imprimirRecibo(venda){
 
       
     
+    </body>
+    </html>
+  `;
+
+  const janela = window.open('', '_blank');
+  janela.document.write(conteudo);
+  janela.document.close();
+}
+
+async function imprimirReciboRecebimento({ venda, valorRecebido, formaPagamento, saldoRestante }){
+  let empresa = {};
+
+  try{
+    const resposta = await fetch('/empresa');
+    empresa = await resposta.json();
+  }catch(erro){
+    empresa = {};
+  }
+
+  const data = new Date().toLocaleString('pt-BR');
+  const clienteNome = venda ? venda.clienteNome || 'Cliente' : 'Cliente';
+  const produtoNome = venda ? venda.produtoNome || '-' : '-';
+  const valorTotal = Number(venda ? venda.valorTotal || 0 : 0);
+  const valorPagoAtual = Number(venda ? venda.valorPago || 0 : 0);
+  const saldo = Number(saldoRestante || 0);
+
+  const conteudo = `
+    <html>
+    <head>
+      <title>Recibo de Recebimento</title>
+      <style>
+        *{box-sizing:border-box;}
+        body{font-family:Arial,sans-serif;margin:0;padding:18px;color:#111;background:#fff;}
+        .recibo{max-width:360px;margin:0 auto;padding:14px;border:1px solid #ddd;border-radius:8px;}
+        h2{text-align:center;margin:0 0 10px;font-size:20px;}
+        .empresa{text-align:center;font-size:12px;color:#555;margin-bottom:12px;}
+        p{margin:8px 0;font-size:14px;}
+        .destaque{font-size:18px;font-weight:700;text-align:center;margin-top:14px;}
+        .rodape{text-align:center;margin-top:18px;font-size:12px;color:#555;}
+        hr{border:none;border-top:1px solid #ddd;margin:12px 0;}
+      </style>
+    </head>
+    <body>
+      <div class="recibo">
+        <h2>${empresa.nome || 'Gestao de Danones'}</h2>
+        <div class="empresa">
+          ${empresa.telefone ? `<div>Telefone: ${empresa.telefone}</div>` : ''}
+          ${empresa.endereco ? `<div>Endereco: ${empresa.endereco}</div>` : ''}
+          ${empresa.instagram ? `<div>Instagram: ${empresa.instagram}</div>` : ''}
+        </div>
+        <hr>
+        <p><strong>Tipo:</strong> Recebimento de fiado</p>
+        <p><strong>Venda:</strong> #${venda && venda.id ? venda.id : '-'}</p>
+        <p><strong>Cliente:</strong> ${clienteNome}</p>
+        <p><strong>Produto:</strong> ${produtoNome}</p>
+        <p><strong>Data:</strong> ${data}</p>
+        <p><strong>Forma de pagamento:</strong> ${formaPagamento || 'Nao informado'}</p>
+        ${valorTotal > 0 ? `<p><strong>Total da venda:</strong> ${dinheiro(valorTotal)}</p>` : ''}
+        ${valorPagoAtual > 0 ? `<p><strong>Ja pago antes:</strong> ${dinheiro(valorPagoAtual)}</p>` : ''}
+        <p class="destaque">Recebido: ${dinheiro(valorRecebido)}</p>
+        <p><strong>Saldo restante:</strong> ${dinheiro(saldo)}</p>
+        <div class="rodape">Recebimento registrado. Obrigado!</div>
+      </div>
+      <script>
+        window.onload = function(){window.print();}
+      <\/script>
     </body>
     </html>
   `;
@@ -3481,147 +3808,6 @@ function marcarCobradoHoje(idVenda, mostrarAlerta = true){
 
   renderizarFiado(abertasFiadoCache || []);
 }
-async function carregarAbertas(){
-  let abertas = [];
-
-  try{
-    const resposta = await fetch('/vendas/abertas');
-
-    if(!resposta.ok){
-      throw new Error('Erro ao buscar vendas em aberto');
-    }
-
-    abertas = await resposta.json();
-
-    salvarCacheLocal('abertasCache', abertas);
-
-  }catch{
-    abertas = carregarCacheLocal('abertasCache') || [];
-    console.log('Fiado carregado do cache local.');
-  }
-
-  let html = '';
-  let htmlCards = '';
-  let total = 0;
-
-  let totalVencidas = 0;
-  let totalHoje = 0;
-  let total7Dias = 0;
-
-  abertas.forEach(venda => {
-    const saldo = Number(venda.saldoRestante || venda.valorTotal || 0);
-
-    total += saldo;
-
-    if(venda.dataVencimento){
-      const hoje = new Date();
-      const vencimentoObj = new Date(venda.dataVencimento);
-
-      hoje.setHours(0,0,0,0);
-      vencimentoObj.setHours(0,0,0,0);
-
-      const dias = Math.ceil(
-        (vencimentoObj - hoje) / (1000 * 60 * 60 * 24)
-      );
-
-      if(dias < 0){
-        totalVencidas++;
-      }else if(dias === 0){
-        totalHoje++;
-      }else if(dias <= 7){
-        total7Dias++;
-      }
-    }
-
-    const data = new Date(venda.data).toLocaleDateString('pt-BR');
-
-    const vencimento = venda.dataVencimento
-      ? new Date(venda.dataVencimento).toLocaleDateString('pt-BR')
-      : '-';
-
-    const situacao = situacaoCobranca(venda.dataVencimento);
-    const vendaTexto = encodeURIComponent(JSON.stringify(venda));
-
-    html += `
-      <tr>
-        <td>${venda.clienteNome}</td>
-        <td>${venda.produtoNome}</td>
-        <td>${venda.quantidade}</td>
-        <td>${dinheiro(venda.valorTotal)}</td>
-        <td>${dinheiro(venda.valorPago || 0)}</td>
-        <td>${dinheiro(saldo)}</td>
-        <td>${data}</td>
-        <td>${vencimento}</td>
-        <td>${situacao}</td>
-        <td>
-          <button onclick="receberVenda(${venda.id}, ${saldo})">Receber</button>
-          <button onclick="cobrarCliente(JSON.parse(decodeURIComponent('${vendaTexto}')))">📱 Cobrar</button>
-        </td>
-      </tr>
-    `;
-
-    htmlCards += `
-      <div class="fiado-card">
-        <div class="fiado-card-top">
-          <div>
-            <h3>${venda.clienteNome}</h3>
-            <p>${venda.produtoNome} • Qtd: ${venda.quantidade}</p>
-          </div>
-          <div class="fiado-status">
-            ${situacao}
-          </div>
-        </div>
-
-        <div class="fiado-valores">
-          <div>
-            <span>Total</span>
-            <strong>${dinheiro(venda.valorTotal)}</strong>
-          </div>
-
-          <div>
-            <span>Pago</span>
-            <strong>${dinheiro(venda.valorPago || 0)}</strong>
-          </div>
-
-          <div>
-            <span>Saldo</span>
-            <strong>${dinheiro(saldo)}</strong>
-          </div>
-        </div>
-
-        <div class="fiado-datas">
-          <span>Venda: ${data}</span>
-          <span>Vencimento: ${vencimento}</span>
-        </div>
-
-        <div class="fiado-card-acoes">
-          <button onclick="receberVenda(${venda.id}, ${saldo})">Receber</button>
-          <button onclick="cobrarCliente(JSON.parse(decodeURIComponent('${vendaTexto}')))">📱 Cobrar</button>
-        </div>
-      </div>
-    `;
-  });
-
-  document.getElementById('listaAbertas').innerHTML = html;
-
-  const cardsAbertas = document.getElementById('cardsAbertas');
-  if(cardsAbertas){
-    cardsAbertas.innerHTML = htmlCards || '<p class="texto-vazio">Nenhuma conta em aberto.</p>';
-  }
-
-  document.getElementById('totalAberto').innerText = dinheiro(total);
-
-  const totalAbertoFiado = document.getElementById('totalAbertoFiado');
-
-  if(totalAbertoFiado){
-    totalAbertoFiado.innerText = dinheiro(total);
-  }
-
-  document.getElementById('cobrancasVencidas').innerText = totalVencidas;
-  document.getElementById('cobrancasHoje').innerText = totalHoje;
-  document.getElementById('cobrancas7Dias').innerText = total7Dias;
-}
-
 async function carregarGraficoPizza(){
   let vendas = [];
 
@@ -3773,6 +3959,8 @@ async function restaurarBackup(){
   if(!confirmar){
     return;
   }
+
+  await exportarBackup();
 
   const arquivo = input.files[0];
   const texto = await arquivo.text();
@@ -4484,6 +4672,54 @@ function atualizarFechamentoDia(){
   preencherTexto('formaHojeCartao', dinheiro(formas.Cartao ? formas.Cartao.total : 0));
   preencherTexto('formaHojeMisto', dinheiro(formas.Misto ? formas.Misto.total : 0));
   preencherTexto('fechamentoFormas', `Formas de pagamento do dia: ${textoFormas || '-'}`);
+  atualizarHistoricoFechamentos();
+}
+
+function dadosFechamentoDia(){
+  return {
+    data:new Date().toISOString(),
+    entradas:document.getElementById('fechamentoEntradas') ? document.getElementById('fechamentoEntradas').innerText : dinheiro(0),
+    saidas:document.getElementById('fechamentoSaidas') ? document.getElementById('fechamentoSaidas').innerText : dinheiro(0),
+    saldo:document.getElementById('fechamentoSaldo') ? document.getElementById('fechamentoSaldo').innerText : dinheiro(0),
+    vendas:document.getElementById('fechamentoVendas') ? document.getElementById('fechamentoVendas').innerText : '0',
+    lucro:document.getElementById('fechamentoLucro') ? document.getElementById('fechamentoLucro').innerText : dinheiro(0),
+    perdas:document.getElementById('fechamentoPerdas') ? document.getElementById('fechamentoPerdas').innerText : dinheiro(0),
+    formas:document.getElementById('fechamentoFormas') ? document.getElementById('fechamentoFormas').innerText : '-',
+    observacao:document.getElementById('fechamentoObservacao') ? document.getElementById('fechamentoObservacao').value.trim() : ''
+  };
+}
+
+function salvarFechamentoDia(){
+  atualizarFechamentoDia();
+
+  const historico = carregarCacheLocal('fechamentosCache') || [];
+  const fechamento = dadosFechamentoDia();
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const semHoje = historico.filter(item => new Date(item.data).toLocaleDateString('pt-BR') !== hoje);
+
+  semHoje.unshift(fechamento);
+  salvarCacheLocal('fechamentosCache', semHoje.slice(0,30));
+  atualizarHistoricoFechamentos();
+  alert('Fechamento do dia salvo no historico local.');
+}
+
+function atualizarHistoricoFechamentos(){
+  const alvo = document.getElementById('historicoFechamentos');
+
+  if(!alvo){
+    return;
+  }
+
+  const historico = carregarCacheLocal('fechamentosCache') || [];
+
+  if(historico.length === 0){
+    alvo.innerText = 'Nenhum fechamento salvo ainda.';
+    return;
+  }
+
+  alvo.innerHTML = historico.slice(0,5).map(item =>
+    `${new Date(item.data).toLocaleDateString('pt-BR')}: saldo ${item.saldo}, vendas ${item.vendas}, lucro ${item.lucro}`
+  ).join('<br>');
 }
 
 function imprimirFechamentoDia(){
@@ -4860,11 +5096,18 @@ function limparFormularioCaixa(){
 }
 
 async function excluirCaixa(id){
-  if(!confirm('Excluir movimentação?')){
+  const caixaCache = carregarCacheLocal('caixaCache') || [];
+  const movimento = caixaCache.find(item => Number(item.id) === Number(id));
+  const syncId = movimento ? String(movimento.sync_id || movimento.syncId || '') : '';
+  const automatico = syncId.startsWith('caixa-venda-') || syncId.startsWith('caixa-pagamento-') || syncId.startsWith('perda-');
+  const aviso = automatico
+    ? '\n\nAtenção: esta movimentação parece automática. Se ela veio de venda, pagamento ou perda, prefira ajustar pela tela original.'
+    : '';
+
+  if(!confirm(`Excluir movimentação do caixa?${aviso}`)){
     return;
   }
 
-  const caixaCache = carregarCacheLocal('caixaCache') || [];
   salvarCacheLocal(
     'caixaCache',
     caixaCache.filter(mov => Number(mov.id) !== Number(id))

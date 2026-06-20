@@ -611,6 +611,22 @@ app.put('/clientes/:id', async (req, res) => {
 app.delete('/clientes/:id', async (req, res) => {
   const id = Number(req.params.id);
 
+  const { data: vendasCliente, error: erroVendasCliente } = await supabase
+    .from('vendas')
+    .select('id')
+    .eq('cliente_id', id)
+    .limit(1);
+
+  if (erroVendasCliente) {
+    return res.status(500).json({ erro: erroVendasCliente.message });
+  }
+
+  if (vendasCliente && vendasCliente.length > 0) {
+    return res.status(400).json({
+      erro: 'Este cliente possui vendas vinculadas. Mantenha o cadastro para preservar o historico.'
+    });
+  }
+
   const { error } = await supabase
     .from('clientes')
     .delete()
@@ -1178,10 +1194,16 @@ app.post('/vendas/:id/receber', async (req, res) => {
     mensagem: 'Pagamento registrado com sucesso',
     venda: {
       id: data.id,
+      clienteId: data.cliente_id,
+      clienteNome: data.cliente_nome,
+      produtoId: data.produto_id,
+      produtoNome: data.produto_nome,
       valorTotal: Number(data.valor_total || 0),
       valorPago: Number(data.valor_pago || 0),
       saldoRestante: Number(data.saldo_restante || 0),
-      status: data.status
+      status: data.status,
+      formaPagamento,
+      valorRecebido
     }
   });
 });
