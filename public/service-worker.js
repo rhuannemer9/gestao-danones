@@ -1,8 +1,9 @@
-const CACHE_NAME = 'gestao-danones-v1';
+const CACHE_NAME = 'gestao-danones-v2';
 
 const ARQUIVOS_CACHE = [
   '/',
   '/index.html',
+  '/styles.css',
   '/manifest.json'
 ];
 

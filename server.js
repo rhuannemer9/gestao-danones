@@ -48,6 +48,64 @@ async function registrarEntradaCaixaAutomatica({ syncId, categoria, descricao, v
     }]);
 }
 
+async function obterClienteParaVenda({ clienteId, clienteNome, clienteAvulso }) {
+  if (!clienteAvulso) {
+    const { data: clienteEncontrado, error: erroCliente } = await supabase
+      .from('clientes')
+      .select('*')
+      .eq('id', clienteId)
+      .single();
+
+    if (erroCliente || !clienteEncontrado) {
+      return {
+        erro: 'Cliente nao encontrado'
+      };
+    }
+
+    return {
+      cliente: clienteEncontrado
+    };
+  }
+
+  const nomeAvulso = clienteNome || 'Cliente Avulso';
+
+  const { data: clienteExistente } = await supabase
+    .from('clientes')
+    .select('*')
+    .eq('nome', nomeAvulso)
+    .limit(1)
+    .maybeSingle();
+
+  if (clienteExistente) {
+    return {
+      cliente: clienteExistente
+    };
+  }
+
+  const { data: clienteCriado, error: erroCriarCliente } = await supabase
+    .from('clientes')
+    .insert([{
+      id: Date.now(),
+      nome: nomeAvulso,
+      telefone: '',
+      endereco: '',
+      observacoes: 'Cliente automatico para vendas pagas avulsas',
+      criado_em: new Date().toISOString()
+    }])
+    .select()
+    .single();
+
+  if (erroCriarCliente || !clienteCriado) {
+    return {
+      erro: erroCriarCliente ? erroCriarCliente.message : 'Nao foi possivel criar Cliente Avulso'
+    };
+  }
+
+  return {
+    cliente: clienteCriado
+  };
+}
+
 // LOGIN
 
 app.post('/login', async (req, res) => {
@@ -681,6 +739,7 @@ app.post('/vendas', async (req, res) => {
   const produtoId = Number(req.body.produtoId);
   const quantidade = Number(req.body.quantidade);
   const status = req.body.status || 'Pago';
+  const formaPagamento = req.body.formaPagamento || 'Nao informado';
   const clienteAvulso = clienteId === 0;
 
   if ((!clienteId && !clienteAvulso) || !produtoId || !quantidade || quantidade <= 0) {
@@ -717,24 +776,17 @@ app.post('/vendas', async (req, res) => {
     return res.status(404).json({ erro: 'Produto não encontrado' });
   }
 
-  let cliente = {
-    id: 0,
-    nome: req.body.clienteNome || 'Cliente Avulso'
-  };
+  const resultadoCliente = await obterClienteParaVenda({
+    clienteId,
+    clienteNome: req.body.clienteNome,
+    clienteAvulso
+  });
 
-  if (!clienteAvulso) {
-    const { data: clienteEncontrado, error: erroCliente } = await supabase
-      .from('clientes')
-      .select('*')
-      .eq('id', clienteId)
-      .single();
-
-    if (erroCliente || !clienteEncontrado) {
-      return res.status(404).json({ erro: 'Cliente nao encontrado' });
-    }
-
-    cliente = clienteEncontrado;
+  if (resultadoCliente.erro) {
+    return res.status(clienteAvulso ? 500 : 404).json({ erro: resultadoCliente.erro });
   }
+
+  const cliente = resultadoCliente.cliente;
 
   if (Number(produto.quantidade || 0) < quantidade) {
     return res.status(400).json({ erro: 'Estoque insuficiente' });
@@ -766,7 +818,7 @@ app.post('/vendas', async (req, res) => {
   const novaVenda = {
     id: Date.now(),
     sync_id: req.body.syncId || null,
-    cliente_id: clienteId,
+    cliente_id: cliente.id,
     cliente_nome: cliente.nome,
     produto_id: produtoId,
     produto_nome: produto.nome,
@@ -795,7 +847,7 @@ app.post('/vendas', async (req, res) => {
     await registrarEntradaCaixaAutomatica({
       syncId: data.sync_id ? `caixa-venda-${data.sync_id}` : `caixa-venda-${data.id}`,
       categoria: 'Venda',
-      descricao: `Venda paga - ${data.cliente_nome} - ${data.produto_nome}`,
+      descricao: `Venda paga - ${formaPagamento} - ${data.cliente_nome} - ${data.produto_nome}`,
       valor: data.valor_total,
       dataMovimento: data.data
     });
@@ -844,26 +896,91 @@ app.put('/vendas/:id', async (req, res) => {
     return res.status(404).json({ erro: 'Venda nao encontrada' });
   }
 
-  let cliente = {
-    id: 0,
-    nome: req.body.clienteNome || 'Cliente Avulso'
-  };
+  const resultadoCliente = await obterClienteParaVenda({
+    clienteId,
+    clienteNome: req.body.clienteNome,
+    clienteAvulso
+  });
 
-  if (!clienteAvulso) {
-    const { data: clienteEncontrado, error: erroCliente } = await supabase
-      .from('clientes')
-      .select('*')
-      .eq('id', clienteId)
-      .single();
-
-    if (erroCliente || !clienteEncontrado) {
-      return res.status(404).json({ erro: 'Cliente nao encontrado' });
-    }
-
-    cliente = clienteEncontrado;
+  if (resultadoCliente.erro) {
+    return res.status(clienteAvulso ? 500 : 404).json({ erro: resultadoCliente.erro });
   }
 
-  const valorTotal = Number(vendaAtual.valor_total || 0);
+  const cliente = resultadoCliente.cliente;
+
+  const produtoId = Number(req.body.produtoId || vendaAtual.produto_id);
+  const quantidade = Number(req.body.quantidade || vendaAtual.quantidade);
+
+  if (!produtoId || !quantidade || quantidade <= 0) {
+    return res.status(400).json({ erro: 'Produto ou quantidade invalidos' });
+  }
+
+  const { data: produtoNovo, error: erroProdutoNovo } = await supabase
+    .from('produtos')
+    .select('*')
+    .eq('id', produtoId)
+    .single();
+
+  if (erroProdutoNovo || !produtoNovo) {
+    return res.status(404).json({ erro: 'Produto nao encontrado' });
+  }
+
+  const produtoAntigoId = Number(vendaAtual.produto_id);
+  const quantidadeAntiga = Number(vendaAtual.quantidade || 0);
+  const mudouProduto = produtoAntigoId !== produtoId;
+
+  if (mudouProduto) {
+    const { data: produtoAntigo, error: erroProdutoAntigo } = await supabase
+      .from('produtos')
+      .select('*')
+      .eq('id', produtoAntigoId)
+      .single();
+
+    if (erroProdutoAntigo || !produtoAntigo) {
+      return res.status(404).json({ erro: 'Produto antigo da venda nao encontrado' });
+    }
+
+    if (Number(produtoNovo.quantidade || 0) < quantidade) {
+      return res.status(400).json({ erro: 'Estoque insuficiente para o novo produto' });
+    }
+
+    const { error: erroRestauraAntigo } = await supabase
+      .from('produtos')
+      .update({ quantidade: Number(produtoAntigo.quantidade || 0) + quantidadeAntiga })
+      .eq('id', produtoAntigoId);
+
+    if (erroRestauraAntigo) {
+      return res.status(500).json({ erro: erroRestauraAntigo.message });
+    }
+
+    const { error: erroBaixaNovo } = await supabase
+      .from('produtos')
+      .update({ quantidade: Number(produtoNovo.quantidade || 0) - quantidade })
+      .eq('id', produtoId);
+
+    if (erroBaixaNovo) {
+      return res.status(500).json({ erro: erroBaixaNovo.message });
+    }
+  } else {
+    const estoqueDisponivel = Number(produtoNovo.quantidade || 0) + quantidadeAntiga;
+
+    if (estoqueDisponivel < quantidade) {
+      return res.status(400).json({ erro: 'Estoque insuficiente para alterar a quantidade' });
+    }
+
+    const { error: erroAjusteEstoque } = await supabase
+      .from('produtos')
+      .update({ quantidade: estoqueDisponivel - quantidade })
+      .eq('id', produtoId);
+
+    if (erroAjusteEstoque) {
+      return res.status(500).json({ erro: erroAjusteEstoque.message });
+    }
+  }
+
+  const valorTotal = Number(produtoNovo.preco_venda || 0) * quantidade;
+  const custoTotal = Number(produtoNovo.custo || 0) * quantidade;
+  const lucro = valorTotal - custoTotal;
   let dataVencimento = vendaAtual.data_vencimento;
 
   if (status === 'Em aberto' && !dataVencimento) {
@@ -875,6 +992,12 @@ app.put('/vendas/:id', async (req, res) => {
   const vendaAtualizada = {
     cliente_id: cliente.id,
     cliente_nome: cliente.nome,
+    produto_id: produtoId,
+    produto_nome: produtoNovo.nome,
+    quantidade,
+    valor_total: valorTotal,
+    custo_total: custoTotal,
+    lucro,
     status,
     data_vencimento: status === 'Em aberto' ? dataVencimento : null,
     valor_pago: status === 'Pago' ? valorTotal : 0,
@@ -895,17 +1018,7 @@ app.put('/vendas/:id', async (req, res) => {
 
   const caixaSyncId = vendaAtual.sync_id ? `caixa-venda-${vendaAtual.sync_id}` : `caixa-venda-${vendaAtual.id}`;
 
-  if (status === 'Pago') {
-    await registrarEntradaCaixaAutomatica({
-      syncId: caixaSyncId,
-      categoria: 'Venda',
-      descricao: `Venda paga - ${data.cliente_nome} - ${data.produto_nome}`,
-      valor: data.valor_total,
-      dataMovimento: data.data
-    });
-  }
-
-  if (status === 'Em aberto') {
+  const limparPagamentosDaVenda = async () => {
     const { data: pagamentosVenda } = await supabase
       .from('pagamentos')
       .select('sync_id')
@@ -928,6 +1041,27 @@ app.put('/vendas/:id', async (req, res) => {
         .delete()
         .eq('venda_id', id);
     }
+  };
+
+  if (status === 'Pago') {
+    await limparPagamentosDaVenda();
+
+    await supabase
+      .from('caixa')
+      .delete()
+      .eq('sync_id', caixaSyncId);
+
+    await registrarEntradaCaixaAutomatica({
+      syncId: caixaSyncId,
+      categoria: 'Venda',
+      descricao: `Venda paga - ${data.cliente_nome} - ${data.produto_nome}`,
+      valor: data.valor_total,
+      dataMovimento: data.data
+    });
+  }
+
+  if (status === 'Em aberto') {
+    await limparPagamentosDaVenda();
 
     await supabase
       .from('caixa')
@@ -960,6 +1094,7 @@ app.put('/vendas/:id', async (req, res) => {
 app.post('/vendas/:id/receber', async (req, res) => {
   const id = Number(req.params.id);
   const valorRecebido = Number(req.body.valorRecebido || 0);
+  const formaPagamento = req.body.formaPagamento || 'Nao informado';
 
   if (!valorRecebido || valorRecebido <= 0) {
     return res.status(400).json({ erro: 'Valor recebido inválido' });
@@ -1033,7 +1168,7 @@ app.post('/vendas/:id/receber', async (req, res) => {
   await registrarEntradaCaixaAutomatica({
     syncId: req.body.syncId ? `caixa-pagamento-${req.body.syncId}` : `caixa-pagamento-${id}-${Date.now()}`,
     categoria: 'Recebimento',
-    descricao: `Recebimento fiado - ${venda.cliente_nome}`,
+    descricao: `Recebimento fiado - ${formaPagamento} - ${venda.cliente_nome}`,
     valor: valorRecebido,
     dataMovimento: new Date().toISOString()
   });
@@ -1220,11 +1355,12 @@ app.get('/backup', async (req, res) => {
   const { data: produtos, error: erroProdutos } = await supabase.from('produtos').select('*');
   const { data: clientes, error: erroClientes } = await supabase.from('clientes').select('*');
   const { data: vendas, error: erroVendas } = await supabase.from('vendas').select('*');
+  const { data: pagamentos, error: erroPagamentos } = await supabase.from('pagamentos').select('*');
   const { data: categorias, error: erroCategorias } = await supabase.from('categorias').select('*');
   const { data: empresa, error: erroEmpresa } = await supabase.from('empresa').select('*');
   const { data: caixa, error: erroCaixa } = await supabase.from('caixa').select('*');
 
-  if (erroProdutos || erroClientes || erroVendas || erroCategorias || erroEmpresa || erroCaixa) {
+  if (erroProdutos || erroClientes || erroVendas || erroPagamentos || erroCategorias || erroEmpresa || erroCaixa) {
     return res.status(500).json({ erro: 'Erro ao gerar backup' });
   }
 
@@ -1232,10 +1368,35 @@ app.get('/backup', async (req, res) => {
     produtos,
     clientes,
     vendas,
+    pagamentos,
     categorias,
     empresa,
     caixa,
     geradoEm: new Date().toISOString()
+  });
+});
+
+app.get('/exportar-json/:tabela', async (req, res) => {
+  const tabelasPermitidas = ['produtos', 'clientes', 'vendas', 'pagamentos', 'caixa', 'categorias', 'empresa'];
+  const tabela = req.params.tabela;
+
+  if (!tabelasPermitidas.includes(tabela)) {
+    return res.status(400).json({ erro: 'Tabela invalida para exportacao' });
+  }
+
+  const { data, error } = await supabase
+    .from(tabela)
+    .select('*');
+
+  if (error) {
+    return res.status(500).json({ erro: error.message });
+  }
+
+  res.json({
+    tabela,
+    geradoEm: new Date().toISOString(),
+    total: data.length,
+    dados: data
   });
 });
 
@@ -1267,6 +1428,11 @@ app.post('/restaurar-backup', async (req, res) => {
 
   if (backup.vendas.length > 0) {
     const { error } = await supabase.from('vendas').insert(backup.vendas);
+    if (error) return res.status(500).json({ erro: error.message });
+  }
+
+  if (backup.pagamentos && backup.pagamentos.length > 0) {
+    const { error } = await supabase.from('pagamentos').insert(backup.pagamentos);
     if (error) return res.status(500).json({ erro: error.message });
   }
 
